@@ -1,0 +1,25 @@
+{
+  "name": "mbta-visualizer",
+  "version": "1.0.0",
+  "description": "CLI tool that fetches real-time bus data for MBTA Route 87 and displays ASCII visualization",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test src/**/*.test.js",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "mbta",
+    "route-87",
+    "visualizer",
+    "cli"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^9.39.4"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2"
+  }
+}
