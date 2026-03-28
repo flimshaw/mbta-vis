@@ -1,4 +1,7 @@
-const API_KEY = '4fb48f72dffb426c9b0386b74dce5f44';
+import 'dotenv/config';
+
+const API_KEY = process.env.MBTA_API_KEY;
+if (!API_KEY) throw new Error('MBTA_API_KEY is not set. Copy .env.example to .env and add your key.');
 const BASE_URL = 'https://api-v3.mbta.com';
 
 /**
