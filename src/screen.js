@@ -46,6 +46,18 @@ export function initScreen() {
     content: ' [r] route  [n] new tab  [?] help  [q] quit',
   });
 
+  tabBar.on('click', (data) => {
+    let pos = 0;
+    for (let i = 0; i < tabs.length; i++) {
+      const tabWidth = tabs[i].label.length + 2; // " label "
+      if (data.x >= pos && data.x < pos + tabWidth) {
+        setActiveTab(i);
+        return;
+      }
+      pos += tabWidth + 1; // +1 for │ separator
+    }
+  });
+
   screen.append(tabBar);
   screen.append(statusBar);
 
