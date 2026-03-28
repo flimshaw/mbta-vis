@@ -16,6 +16,8 @@ export function createRouteView() {
     tags: true,
   });
 
+  const RIGHT_WIDTH = 68; // vehicle pane width including border
+
   // Persistent color assignments so bus colors stay stable across refreshes
   const colorMap = new Map();
 
@@ -25,27 +27,26 @@ export function createRouteView() {
   let lastPageSize = 1;
   let lastUpdateArgs = null;
 
-  // Info overlay — lives outside the destroy loop so it's never recreated
-  const infoBox = blessed.box({
-    bottom: 0,
-    right: 0,
-    width: 68,
-    height: 4,
+  // Left pane: stop list. Right pane: vehicle info. Both are persistent.
+  const leftPane = blessed.box({
+    top: 0, left: 0,
+    width: `100%-${RIGHT_WIDTH}`,
+    height: '100%',
+    tags: true,
+    border: { type: 'line' },
+    style: { border: { fg: 'grey' } },
+  });
+  const rightPane = blessed.box({
+    top: 0, right: 0,
+    width: RIGHT_WIDTH,
+    height: '100%',
     tags: true,
     border: { type: 'line' },
     label: ' Vehicles ',
     style: { border: { fg: 'grey' }, bg: 'black' },
   });
-  // Content area — all route rendering goes here; this is what gets cleared
-  const contentBox = blessed.box({
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    tags: true,
-  });
-  box.append(contentBox);
-  box.append(infoBox); // appended after contentBox so it renders on top
+  box.append(leftPane);
+  box.append(rightPane);
 
   // Re-render on terminal resize using the last known data
   getScreen().on('resize', () => { if (lastUpdateArgs) update(...lastUpdateArgs); });
@@ -53,11 +54,13 @@ export function createRouteView() {
   function update(buses, stops, extraStops, directionId, routeNumber = '87', predictions = {}) {
     lastUpdateArgs = [buses, stops, extraStops, directionId, routeNumber, predictions];
     const screen = getScreen();
-    const screenWidth = screen.width;
     const contentHeight = screen.height - 2; // minus tab bar and status bar
 
+    // Left pane inner width (subtract 2 for border)
+    const leftInnerWidth = leftPane.width - 2;
+
     // Compute visible stop window for scrolling
-    const pageSize = contentHeight - 3; // rows available below header
+    const pageSize = contentHeight - 4; // rows available inside left pane (border + header)
     lastPageSize = pageSize;
     lastStopsLength = stops.length;
     scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, stops.length - pageSize)));
@@ -75,68 +78,29 @@ export function createRouteView() {
       (segmentBuses[p.segmentIndex] ??= []).push(p);
     });
 
-    // Single column (left half) unless the full stop list exceeds one column's height,
-    // in which case use two columns each at half width.
-    const numCols = stops.length > pageSize ? 2 : 1;
-    const colWidth = Math.floor(screenWidth / 2);
-    const stopsPerCol = Math.ceil(visibleStops.length / numCols);
-
     const dir = directionId === 0 ? 'Outbound' : 'Inbound';
     const scrollInfo = stops.length > pageSize
-      ? `  {grey-fg}[${scrollOffset + 1}–${Math.min(scrollOffset + pageSize, stops.length)}/${stops.length}]{/grey-fg}`
+      ? ` {grey-fg}[${scrollOffset + 1}–${Math.min(scrollOffset + pageSize, stops.length)}/${stops.length}]{/grey-fg}`
       : '';
-    const header = `{bold}{cyan-fg}MBTA Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} vehicle(s) active{/grey-fg}${scrollInfo}`;
+    const header = `{bold}{cyan-fg}Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} vehicle(s){/grey-fg}${scrollInfo}`;
 
-    // Clear only the content area, not infoBox
-    contentBox.children.slice().forEach(c => c.destroy());
+    // Translate global segment indices to local (accounting for scroll offset)
+    const localSegBuses = {};
+    Object.entries(segmentBuses).forEach(([idx, placements]) => {
+      const localIdx = parseInt(idx) - scrollOffset;
+      if (localIdx >= 0 && localIdx < visibleStops.length - 1) {
+        localSegBuses[localIdx] = placements;
+      }
+    });
 
-    contentBox.append(blessed.box({
-      top: 0, left: 0, width: '100%', height: 2,
-      tags: true, content: '\n ' + header,
-    }));
+    const hasMoreStops = (scrollOffset + pageSize) < stops.length;
+    const stopLines = buses.length === 0
+      ? ['{yellow-fg}No active vehicles.{/yellow-fg}']
+      : renderColumn(visibleStops, localSegBuses, leftInnerWidth, hasMoreStops, colorMap, scrollOffset);
 
-    if (buses.length === 0) {
-      contentBox.append(blessed.box({
-        top: 2, left: 0, width: '100%', height: 3,
-        tags: true, content: '\n {yellow-fg}No active vehicles on this route.{/yellow-fg}',
-      }));
-      updateInfoBox([], stops, extraStops, [], colorMap, infoBox, {}, {});
-      screen.render();
-      return;
-    }
+    leftPane.setContent('\n ' + header + '\n' + stopLines.join('\n'));
 
-    for (let col = 0; col < numCols; col++) {
-      const startIdx = col * stopsPerCol;
-      const endIdx = Math.min(startIdx + stopsPerCol + 1, visibleStops.length);
-      const colStops = visibleStops.slice(startIdx, endIdx);
-
-      // Translate global segment indices to local (accounting for scroll offset)
-      const globalStartIdx = scrollOffset + startIdx;
-      const localSegBuses = {};
-      Object.entries(segmentBuses).forEach(([idx, placements]) => {
-        const localIdx = parseInt(idx) - globalStartIdx;
-        if (localIdx >= 0 && localIdx < colStops.length - 1) {
-          localSegBuses[localIdx] = placements;
-        }
-      });
-
-      const boxWidth = colWidth;
-      const innerWidth = boxWidth - 2;
-      const hasMoreStops = (scrollOffset + endIdx) < stops.length;
-
-      contentBox.append(blessed.box({
-        top: 2,
-        left: col * colWidth,
-        width: boxWidth,
-        height: contentHeight - 2,
-        tags: true,
-        content: renderColumn(colStops, localSegBuses, innerWidth, hasMoreStops, colorMap, globalStartIdx).join('\n'),
-        border: { type: 'line' },
-        style: { border: { fg: 'grey' } },
-      }));
-    }
-
-    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions, placedByVehicleId);
+    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId);
     screen.render();
   }
 
@@ -289,10 +253,9 @@ function renderSubwayCard(bus, placement, colorMap, stops, extraStopById, stopBy
   return [line1, line2, ...statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER)];
 }
 
-function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions, placedByVehicleId) {
+function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId) {
   if (buses.length === 0) {
-    infoBox.height = 3;
-    infoBox.setContent('{grey-fg}No vehicles{/grey-fg}');
+    rightPane.setContent('{grey-fg}No vehicles{/grey-fg}');
     return;
   }
 
@@ -301,10 +264,20 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, pr
   const extraStopById = {};
   extraStops.forEach(s => { extraStopById[s.id] = s; });
 
-  const INNER = 66; // infoBox width (68) minus 2 for border
+  const INNER = rightPane.width - 2; // inner width accounts for border
+
+  // Sort vehicles by their stop index so order matches the stop list top-to-bottom
+  const sortedBuses = [...buses].sort((a, b) => {
+    const pa = placedByVehicleId[a.id];
+    const pb = placedByVehicleId[b.id];
+    const ia = pa ? pa.stopIdx ?? pa.segmentIndex : Infinity;
+    const ib = pb ? pb.stopIdx ?? pb.segmentIndex : Infinity;
+    return ia - ib;
+  });
+
   const divider = `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`;
 
-  const cards = buses.flatMap(bus => {
+  const cards = sortedBuses.flatMap(bus => {
     const vehiclePreds = predictions[bus.id] ?? [];
     const placement = placedByVehicleId[bus.id] ?? null;
     const cardLines = bus.carriages.length > 0
@@ -316,8 +289,7 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, pr
   // Remove trailing divider
   cards.pop();
 
-  infoBox.height = cards.length + 2;
-  infoBox.setContent(cards.join('\n'));
+  rightPane.setContent(cards.join('\n'));
 }
 
 // Lay out left and right text in a fixed-width field.

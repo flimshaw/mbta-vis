@@ -1,5 +1,5 @@
 import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchSubwayRoutes, fetchStopsByIds, fetchRoutePredictions, parseVehicle, parseStop } from './mbta-api.js';
-import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, openRouteSelector, setActiveTab } from './screen.js';
+import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, onScroll, openRouteSelector, setActiveTab } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
 const AUTO_REFRESH_MS = 10000;
@@ -179,6 +179,8 @@ export async function main() {
     newTabPending = true;
     openRouteSelector();
   });
+
+  onScroll(delta => { activeTab()?.view.scroll(delta); });
 
   onTabSwitch(index => {
     activeTabIdx = index;

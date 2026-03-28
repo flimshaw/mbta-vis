@@ -12,6 +12,7 @@ let onRouteSelectCb = null;
 let onDirectionToggleCb = null;
 let onNewTabCb = null;
 let onTabSwitchCb = null;
+let onScrollCb = null;
 
 /**
  * Initialize the blessed screen. Call once at startup.
@@ -52,6 +53,10 @@ export function initScreen() {
   screen.key('n', () => { if (onNewTabCb) onNewTabCb(); });
   screen.key('d', () => { if (onDirectionToggleCb) onDirectionToggleCb(); });
   screen.key('?', () => showHelpOverlay());
+  screen.key(['up', 'k'], () => { if (onScrollCb) onScrollCb(-1); });
+  screen.key(['down', 'j'], () => { if (onScrollCb) onScrollCb(1); });
+  screen.key('pageup', () => { if (onScrollCb) onScrollCb(-10); });
+  screen.key('pagedown', () => { if (onScrollCb) onScrollCb(10); });
   screen.key(['left', 'S-tab'], () => setActiveTab(activeTabIndex - 1));
   screen.key(['right', 'tab'], () => setActiveTab(activeTabIndex + 1));
   for (let i = 1; i <= 9; i++) {
@@ -153,6 +158,10 @@ export function onNewTab(callback) {
 
 export function onTabSwitch(callback) {
   onTabSwitchCb = callback;
+}
+
+export function onScroll(callback) {
+  onScrollCb = callback;
 }
 
 export function openRouteSelector() {
@@ -278,7 +287,8 @@ function showHelpOverlay() {
       '  {cyan-fg}n{/cyan-fg}       New tab',
       '  {cyan-fg}r{/cyan-fg}       Open route selector',
       '  {cyan-fg}d{/cyan-fg}       Toggle inbound/outbound',
-      '  {cyan-fg}PgUp/Dn{/cyan-fg} Scroll stops list',
+      '  {cyan-fg}↑↓ / j k{/cyan-fg} Scroll stops list',
+      '  {cyan-fg}PgUp/Dn{/cyan-fg} Scroll stops by 10',
       '  {cyan-fg}?{/cyan-fg}       Toggle this help',
       '  {cyan-fg}← →{/cyan-fg}     Switch tabs (or mode in selector)',
       '  {cyan-fg}1-9{/cyan-fg}     Jump to tab',
