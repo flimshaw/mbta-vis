@@ -143,9 +143,9 @@ export function placeBuses(buses, stops) {
     if (!seg) return [];
     const { segmentIndex, proportion } = seg;
     const stopIdx =
-      bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT'
-        ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)
-        : segmentIndex;
+      bus.currentStatus === 'INCOMING_AT' ? segmentIndex + 1
+      : bus.currentStatus === 'STOPPED_AT' ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)
+      : segmentIndex;
     return [{ bus, segmentIndex, proportion, stopIdx }];
   });
 }

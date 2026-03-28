@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/main.js",
   "scripts": {
-    "start": "node src/main.js",
+    "start": "node src/main.js 87 1",
     "test": "node --test src/**/*.test.js",
     "lint": "eslint src/"
   },
