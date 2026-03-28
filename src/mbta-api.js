@@ -46,6 +46,21 @@ export async function fetchRouteVehicles(routeNumber, directionId = null) {
 }
 
 /**
+ * Fetch all bus routes
+ * @returns {Promise<Array>} - Array of {id, name} objects sorted by id
+ */
+export async function fetchBusRoutes() {
+  const data = await fetchFromApi('/routes', { 'filter[type]': '3' });
+  return (data.data || [])
+    .map(r => ({ id: r.id, name: r.attributes?.long_name || r.id }))
+    .sort((a, b) => {
+      const na = parseFloat(a.id), nb = parseFloat(b.id);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.id.localeCompare(b.id);
+    });
+}
+
+/**
  * Fetch all stops for a route
  * @param {string} routeNumber - Route number (e.g., '87', '57', '92')
  * @returns {Promise<Array>} - Array of stop data
@@ -78,7 +93,8 @@ export function parseVehicle(vehicle) {
     directionId: attrs.direction_id,
     currentStopSequence: attrs.current_stop_sequence,
     lastUpdated: attrs.last_update,
-    occupancyStatus: attrs.occupancy_status || 'UNKNOWN'
+    occupancyStatus: attrs.occupancy_status || 'UNKNOWN',
+    currentStatus: attrs.current_status || 'UNKNOWN'
   };
 }
 
