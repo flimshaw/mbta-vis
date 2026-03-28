@@ -1,6 +1,6 @@
 import blessed from 'blessed';
 import { getScreen } from '../screen.js';
-import { placeBuses, busMarker } from '../utils.js';
+import { placeBuses, busMarker, busColor, formatOccupancy } from '../utils.js';
 
 /**
  * Create a route visualization view.
@@ -9,12 +9,35 @@ import { placeBuses, busMarker } from '../utils.js';
 export function createRouteView() {
   const box = blessed.box({ tags: true });
 
+  // Persistent color assignments so bus colors stay stable across refreshes
+  const colorMap = new Map();
+
+  // Info overlay — created once, lives in the lower-right corner
+  const infoBox = blessed.box({
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 6, // resized dynamically on each update
+    tags: true,
+    border: { type: 'line' },
+    label: ' Buses ',
+    style: { border: { fg: 'grey' }, bg: 'black' },
+    content: '',
+  });
+
   function update(buses, stops, directionId, routeNumber = '87') {
     const screen = getScreen();
     const screenWidth = screen.width;
     const boxHeight = box.height || (screen.height - 2);
 
     const placed = placeBuses(buses, stops);
+    const placedIds = new Set(placed.map(p => p.bus.id));
+
+    // Buses that couldn't be placed on any segment
+    const unplaced = buses.filter(b => !placedIds.has(b.id));
+
+    // Ensure all bus IDs have a color assigned (including unplaced)
+    buses.forEach(b => busColor(b.id, colorMap));
 
     // Group placements by segment index
     const segmentBuses = {};
@@ -70,11 +93,15 @@ export function createRouteView() {
         tags: true,
         scrollable: true,
         keys: true,
-        content: renderColumn(colStops, localSegBuses, innerWidth, hasMoreStops).join('\n'),
+        content: renderColumn(colStops, localSegBuses, innerWidth, hasMoreStops, colorMap).join('\n'),
         border: numCols > 1 ? { type: 'line' } : undefined,
         style: numCols > 1 ? { border: { fg: 'grey' } } : undefined,
       }));
     }
+
+    // Update info overlay
+    updateInfoBox(buses, unplaced, colorMap, infoBox);
+    box.append(infoBox);
 
     screen.render();
   }
@@ -82,7 +109,21 @@ export function createRouteView() {
   return { box, update };
 }
 
-function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false) {
+function updateInfoBox(buses, unplaced, colorMap, infoBox) {
+  const lines = buses.map(bus => {
+    const color = colorMap.get(bus.id) || 'white';
+    const marker = busMarker(bus).char;
+    const label = `Bus ${bus.label || bus.id}`.padEnd(10).slice(0, 10);
+    const occ = formatOccupancy(bus.occupancyStatus);
+    const flag = unplaced.some(u => u.id === bus.id) ? ' {grey-fg}?{/grey-fg}' : '';
+    return `{${color}-fg}${marker} ${label}{/${color}-fg} {grey-fg}${occ}{/grey-fg}${flag}`;
+  });
+
+  infoBox.height = Math.min(buses.length + 2, 12);
+  infoBox.setContent(lines.join('\n'));
+}
+
+function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map()) {
   const LABEL_WIDTH = Math.floor(innerWidth / 2) - 2;
   const trackWidth = Math.max(4, innerWidth - LABEL_WIDTH - 3);
   const lines = [];
@@ -108,8 +149,10 @@ function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false) {
 
     let marker = '{grey-fg}◉{/grey-fg}';
     if (atStop.length > 0) {
-      const m = busMarker(atStop[0].bus);
-      marker = `{${m.color}-fg}${m.char}{/${m.color}-fg}`;
+      const p = atStop[0];
+      const color = colorMap.get(p.bus.id) || 'white';
+      const char = busMarker(p.bus).char;
+      marker = `{${color}-fg}${char}{/${color}-fg}`;
     }
 
     const nameTag = hasActivity
@@ -123,8 +166,9 @@ function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false) {
 
       inTransit.forEach(p => {
         const pos = Math.max(1, Math.min(trackWidth - 2, Math.floor(p.proportion * (trackWidth - 2)) + 1));
-        const m = busMarker(p.bus);
-        track[pos] = { color: m.color, char: m.char };
+        const color = colorMap.get(p.bus.id) || 'white';
+        const char = busMarker(p.bus).char;
+        track[pos] = { color, char };
       });
 
       trackPart = ' ' + track.map(ch =>

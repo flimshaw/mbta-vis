@@ -1,5 +1,5 @@
 import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, parseVehicle, parseStop } from './mbta-api.js';
-import { initScreen, addTab, setStatus, setRouteList, onRouteSelect } from './screen.js';
+import { initScreen, addTab, setStatus, setRouteList, onRouteSelect, onDirectionToggle } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
 const AUTO_REFRESH_MS = 10000;
@@ -21,7 +21,7 @@ async function refreshAndDisplay() {
     const [vehicles, stops] = await fetchWithRetry(() =>
       Promise.all([
         fetchRouteVehicles(currentRoute, currentDirection),
-        fetchRouteStops(currentRoute),
+        fetchRouteStops(currentRoute, currentDirection),
       ])
     );
 
@@ -69,6 +69,13 @@ function switchRoute(routeId) {
   refreshAndDisplay();
 }
 
+function toggleDirection() {
+  currentDirection = currentDirection === 0 ? 1 : 0;
+  clearTimeout(refreshTimer);
+  clearInterval(countdownTimer);
+  refreshAndDisplay();
+}
+
 async function fetchWithRetry(fetchFn) {
   let lastError;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -93,6 +100,7 @@ export async function main() {
 
   initScreen();
   onRouteSelect(switchRoute);
+  onDirectionToggle(toggleDirection);
 
   activeView = createRouteView();
   addTab(`Route ${currentRoute}`, activeView);

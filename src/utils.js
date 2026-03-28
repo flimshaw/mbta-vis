@@ -127,17 +127,54 @@ export function placeBuses(buses, stops) {
   });
 }
 
+// Palette of distinct colors for per-bus identity coloring.
+// Avoid red (reserved for errors) and grey (inactive stops).
+const BUS_PALETTE = ['cyan', 'green', 'yellow', 'magenta', 'blue', 'white'];
+
 /**
- * Get display marker character and color for a bus based on its status
+ * Assign a stable color to a bus ID from the palette.
+ * Pass the same colorMap across renders to keep colors stable.
+ * @param {string} busId
+ * @param {Map} colorMap - Persistent Map<busId, color>
+ * @returns {string} blessed color name
+ */
+export function busColor(busId, colorMap) {
+  if (!colorMap.has(busId)) {
+    colorMap.set(busId, BUS_PALETTE[colorMap.size % BUS_PALETTE.length]);
+  }
+  return colorMap.get(busId);
+}
+
+/**
+ * Get display marker character for a bus based on its status.
+ * Color is now sourced from busColor() rather than status.
  * @param {object} bus - Parsed bus object
- * @returns {{ char: string, color: string }}
+ * @returns {{ char: string }}
  */
 export function busMarker(bus) {
   switch (bus.currentStatus) {
-    case 'STOPPED_AT':    return { char: '■', color: 'yellow' };
-    case 'INCOMING_AT':   return { char: '▷', color: 'cyan' };
-    case 'IN_TRANSIT_TO': return { char: '▶', color: 'green' };
-    default:              return { char: '▶', color: 'white' };
+    case 'STOPPED_AT':    return { char: '■' };
+    case 'INCOMING_AT':   return { char: '▷' };
+    case 'IN_TRANSIT_TO': return { char: '▶' };
+    default:              return { char: '▶' };
+  }
+}
+
+/**
+ * Format occupancy status into a short human-readable string.
+ * @param {string} status
+ * @returns {string}
+ */
+export function formatOccupancy(status) {
+  switch (status) {
+    case 'EMPTY':                       return 'Empty';
+    case 'MANY_SEATS_AVAILABLE':        return 'Many seats';
+    case 'FEW_SEATS_AVAILABLE':         return 'Few seats';
+    case 'STANDING_ROOM_ONLY':          return 'Standing only';
+    case 'CRUSHED_STANDING_ROOM_ONLY':  return 'Crushed';
+    case 'FULL':                        return 'Full';
+    case 'NOT_ACCEPTING_PASSENGERS':    return 'Not boarding';
+    default:                            return 'Unknown';
   }
 }
 

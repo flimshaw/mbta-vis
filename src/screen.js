@@ -9,6 +9,7 @@ let routeOverlay = null;
 let helpOverlay = null;
 let cachedRoutes = [];
 let onRouteSelectCb = null;
+let onDirectionToggleCb = null;
 
 /**
  * Initialize the blessed screen. Call once at startup.
@@ -46,6 +47,7 @@ export function initScreen() {
 
   screen.key(['q', 'C-c'], () => { screen.destroy(); process.exit(0); });
   screen.key('r', () => showRouteOverlay());
+  screen.key('d', () => { if (onDirectionToggleCb) onDirectionToggleCb(); });
   screen.key('?', () => showHelpOverlay());
   screen.key(['left', 'S-tab'], () => setActiveTab(activeTabIndex - 1));
   screen.key(['right', 'tab'], () => setActiveTab(activeTabIndex + 1));
@@ -134,6 +136,10 @@ export function onRouteSelect(callback) {
   onRouteSelectCb = callback;
 }
 
+export function onDirectionToggle(callback) {
+  onDirectionToggleCb = callback;
+}
+
 function showRouteOverlay() {
   if (routeOverlay) {
     routeOverlay.destroy();
@@ -203,6 +209,7 @@ function showHelpOverlay() {
       '  {bold}Keyboard Shortcuts{/bold}',
       '',
       '  {cyan-fg}r{/cyan-fg}       Open route selector',
+      '  {cyan-fg}d{/cyan-fg}       Toggle inbound/outbound',
       '  {cyan-fg}?{/cyan-fg}       Toggle this help',
       '  {cyan-fg}← →{/cyan-fg}     Switch tabs',
       '  {cyan-fg}1-9{/cyan-fg}     Jump to tab',
