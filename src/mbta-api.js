@@ -96,9 +96,12 @@ export function parseVehicle(vehicle) {
     longitude: attrs.longitude,
     directionId: attrs.direction_id,
     currentStopSequence: attrs.current_stop_sequence,
-    lastUpdated: attrs.last_update,
+    currentStopId: vehicle.relationships?.stop?.data?.id || null,
+    lastUpdated: attrs.updated_at || null,
     occupancyStatus: attrs.occupancy_status || 'UNKNOWN',
-    currentStatus: attrs.current_status || 'UNKNOWN'
+    currentStatus: attrs.current_status || 'UNKNOWN',
+    speed: attrs.speed,
+    revenue: attrs.revenue === 'REVENUE',
   };
 }
 

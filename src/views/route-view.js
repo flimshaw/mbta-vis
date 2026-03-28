@@ -23,7 +23,7 @@ export function createRouteView() {
   const infoBox = blessed.box({
     bottom: 0,
     right: 0,
-    width: 24,
+    width: 34,
     height: 4,
     tags: true,
     border: { type: 'line' },
@@ -77,7 +77,7 @@ export function createRouteView() {
         top: 2, left: 0, width: '100%', height: 3,
         tags: true, content: '\n {yellow-fg}No active buses on this route.{/yellow-fg}',
       }));
-      updateInfoBox([], [], colorMap, infoBox);
+      updateInfoBox([], stops, [], colorMap, infoBox);
       screen.render();
       return;
     }
@@ -113,7 +113,7 @@ export function createRouteView() {
       }));
     }
 
-    updateInfoBox(buses, unplaced, colorMap, infoBox);
+    updateInfoBox(buses, stops, unplaced, colorMap, infoBox);
     screen.render();
   }
 
@@ -139,24 +139,59 @@ function occupancyBar(status) {
   return `{${level.color}-fg}[${filled}]{/${level.color}-fg}`;
 }
 
-function updateInfoBox(buses, unplaced, colorMap, infoBox) {
+function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
   if (buses.length === 0) {
     infoBox.height = 3;
     infoBox.setContent('{grey-fg}No buses{/grey-fg}');
     return;
   }
 
-  const lines = buses.map(bus => {
+  const stopById = {};
+  stops.forEach(s => { stopById[s.id] = s; });
+
+  const INNER = 32; // infoBox width (34) minus 2 for border
+
+  const cards = buses.flatMap(bus => {
     const color = colorMap.get(bus.id) || 'white';
     const char = busMarker(bus).char;
-    const label = (bus.label || bus.id).slice(0, 6).padEnd(6);
-    const bar = occupancyBar(bus.occupancyStatus);
-    const flag = unplaced.some(u => u.id === bus.id) ? '{grey-fg}?{/grey-fg}' : ' ';
-    return `{${color}-fg}${char} ${label}{/${color}-fg} ${bar} ${flag}`;
+    const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
+    const label = (bus.label || bus.id).slice(0, 6);
+    const speedKmh = bus.speed != null ? Math.round(bus.speed) : 0;
+    const speedStr = `${speedKmh} km/h`;
+
+    // Line 1: marker + label + revenue + speed
+    const line1Left = `{${color}-fg}${char} Bus ${label}{/${color}-fg} ${revenue}`;
+    const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
+    const line1 = padBetween(line1Left, line1Right, INNER);
+
+    // Line 2: status + stop name
+    const statusShort = {
+      'STOPPED_AT':    'at',
+      'INCOMING_AT':   '→',
+      'IN_TRANSIT_TO': '→',
+    }[bus.currentStatus] ?? '?';
+    const stopName = (stopById[bus.currentStopId]?.name ?? '').slice(0, INNER - 4);
+    const line2 = `{grey-fg}${statusShort} {white-fg}${stopName}{/white-fg}{/grey-fg}`;
+
+    // Line 3: occupancy bar
+    const line3 = occupancyBar(bus.occupancyStatus);
+
+    return [line1, line2, line3, '{grey-fg}─'.repeat(INNER) + '{/grey-fg}'];
   });
 
-  infoBox.height = buses.length + 2;
-  infoBox.setContent(lines.join('\n'));
+  // Remove trailing divider
+  cards.pop();
+
+  infoBox.height = cards.length + 2;
+  infoBox.setContent(cards.join('\n'));
+}
+
+// Lay out left and right text in a fixed-width field.
+// Tag characters don't count toward visible width so we measure raw visible chars.
+function padBetween(left, right, totalWidth) {
+  const visibleLen = s => s.replace(/\{[^}]+\}/g, '').length;
+  const gap = Math.max(1, totalWidth - visibleLen(left) - visibleLen(right));
+  return left + ' '.repeat(gap) + right;
 }
 
 function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map()) {
