@@ -19,6 +19,12 @@ export function createRouteView() {
   // Persistent color assignments so bus colors stay stable across refreshes
   const colorMap = new Map();
 
+  // Scroll state — persists across data refreshes
+  let scrollOffset = 0;
+  let lastStopsLength = 0;
+  let lastPageSize = 1;
+  let lastUpdateArgs = null;
+
   // Info overlay — lives outside the destroy loop so it's never recreated
   const infoBox = blessed.box({
     bottom: 0,
@@ -42,9 +48,17 @@ export function createRouteView() {
   box.append(infoBox); // appended after contentBox so it renders on top
 
   function update(buses, stops, extraStops, directionId, routeNumber = '87') {
+    lastUpdateArgs = [buses, stops, extraStops, directionId, routeNumber];
     const screen = getScreen();
     const screenWidth = screen.width;
     const contentHeight = screen.height - 2; // minus tab bar and status bar
+
+    // Compute visible stop window for scrolling
+    const pageSize = contentHeight - 3; // rows available below header
+    lastPageSize = pageSize;
+    lastStopsLength = stops.length;
+    scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, stops.length - pageSize)));
+    const visibleStops = stops.slice(scrollOffset, scrollOffset + pageSize);
 
     buses.forEach(b => busColor(b.id, colorMap));
 
@@ -59,10 +73,13 @@ export function createRouteView() {
 
     const numCols = screenWidth >= 180 ? 3 : screenWidth >= 110 ? 2 : 1;
     const colWidth = Math.floor(screenWidth / numCols);
-    const stopsPerCol = Math.ceil(stops.length / numCols);
+    const stopsPerCol = Math.ceil(visibleStops.length / numCols);
 
     const dir = directionId === 0 ? 'Outbound' : 'Inbound';
-    const header = `{bold}{cyan-fg}MBTA Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} bus(es) active{/grey-fg}`;
+    const scrollInfo = stops.length > pageSize
+      ? `  {grey-fg}[${scrollOffset + 1}–${Math.min(scrollOffset + pageSize, stops.length)}/${stops.length}]{/grey-fg}`
+      : '';
+    const header = `{bold}{cyan-fg}MBTA Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} bus(es) active{/grey-fg}${scrollInfo}`;
 
     // Clear only the content area, not infoBox
     contentBox.children.slice().forEach(c => c.destroy());
@@ -84,12 +101,14 @@ export function createRouteView() {
 
     for (let col = 0; col < numCols; col++) {
       const startIdx = col * stopsPerCol;
-      const endIdx = Math.min(startIdx + stopsPerCol + 1, stops.length);
-      const colStops = stops.slice(startIdx, endIdx);
+      const endIdx = Math.min(startIdx + stopsPerCol + 1, visibleStops.length);
+      const colStops = visibleStops.slice(startIdx, endIdx);
 
+      // Translate global segment indices to local (accounting for scroll offset)
+      const globalStartIdx = scrollOffset + startIdx;
       const localSegBuses = {};
       Object.entries(segmentBuses).forEach(([idx, placements]) => {
-        const localIdx = parseInt(idx) - startIdx;
+        const localIdx = parseInt(idx) - globalStartIdx;
         if (localIdx >= 0 && localIdx < colStops.length - 1) {
           localSegBuses[localIdx] = placements;
         }
@@ -97,7 +116,7 @@ export function createRouteView() {
 
       const boxWidth = col < numCols - 1 ? colWidth : screenWidth - col * colWidth;
       const innerWidth = numCols > 1 ? boxWidth - 2 : boxWidth;
-      const hasMoreStops = endIdx < stops.length;
+      const hasMoreStops = (scrollOffset + endIdx) < stops.length;
 
       contentBox.append(blessed.box({
         top: 2,
@@ -105,9 +124,7 @@ export function createRouteView() {
         width: boxWidth,
         height: contentHeight - 2,
         tags: true,
-        scrollable: true,
-        keys: true,
-        content: renderColumn(colStops, localSegBuses, innerWidth, hasMoreStops, colorMap).join('\n'),
+        content: renderColumn(colStops, localSegBuses, innerWidth, hasMoreStops, colorMap, globalStartIdx).join('\n'),
         border: numCols > 1 ? { type: 'line' } : undefined,
         style: numCols > 1 ? { border: { fg: 'grey' } } : undefined,
       }));
@@ -117,7 +134,14 @@ export function createRouteView() {
     screen.render();
   }
 
-  return { box, update };
+  function scroll(delta) {
+    if (!lastUpdateArgs) return;
+    const maxOffset = Math.max(0, lastStopsLength - lastPageSize);
+    scrollOffset = Math.max(0, Math.min(scrollOffset + delta, maxOffset));
+    update(...lastUpdateArgs);
+  }
+
+  return { box, update, scroll };
 }
 
 // Occupancy levels in increasing order, used to build the fill bar
@@ -209,7 +233,7 @@ function padBetween(left, right, totalWidth) {
   return left + ' '.repeat(gap) + right;
 }
 
-function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map()) {
+function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0) {
   const LABEL_WIDTH = Math.floor(innerWidth / 2) - 2;
   const trackWidth = Math.max(4, innerWidth - LABEL_WIDTH - 3);
   const lines = [];
@@ -220,7 +244,7 @@ function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, col
 
     const atStop = Object.values(segmentBuses).flat().filter(
       p => (p.bus.currentStatus === 'STOPPED_AT' || p.bus.currentStatus === 'INCOMING_AT')
-        && p.stopIdx === i
+        && p.stopIdx === i + globalOffset
     );
 
     const inTransit = (segmentBuses[i] ?? []).filter(

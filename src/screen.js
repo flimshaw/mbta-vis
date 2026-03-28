@@ -143,6 +143,7 @@ export function onDirectionToggle(callback) {
   onDirectionToggleCb = callback;
 }
 
+
 function showRouteOverlay() {
   if (routeOverlay) {
     routeOverlay.destroy();
@@ -163,8 +164,6 @@ function showRouteOverlay() {
     border: { type: 'line' },
     label: ' Select Route (↑↓ navigate, Enter select) ',
     tags: true,
-    keys: true,
-    vi: true,
     mouse: true,
     style: { selected: { bg: 'blue', fg: 'white' }, border: { fg: 'cyan' } },
     items: routes.map(r => `  ${r.id.padEnd(6)} ${r.name}`),
@@ -179,12 +178,34 @@ function showRouteOverlay() {
 
   routeOverlay.key(['escape', 'r'], closeRouteOverlay);
 
-  routeOverlay.on('select', (_item, index) => {
-    const route = routes[index];
+  const overlayPageSize = Math.max(1, Math.floor(screen.height * 0.8) - 2);
+  routeOverlay.key('pageup', () => {
+    const i = routeOverlay.selected;
+    routeOverlay.select(Math.max(0, i - overlayPageSize));
+    screen.render();
+  });
+  routeOverlay.key('pagedown', () => {
+    const i = routeOverlay.selected;
+    routeOverlay.select(Math.min(routes.length - 1, i + overlayPageSize));
+    screen.render();
+  });
+  routeOverlay.key(['up', 'k'], () => {
+    const i = routeOverlay.selected;
+    routeOverlay.select(i <= 0 ? routes.length - 1 : i - 1);
+    screen.render();
+  });
+  routeOverlay.key(['down', 'j'], () => {
+    const i = routeOverlay.selected;
+    routeOverlay.select(i >= routes.length - 1 ? 0 : i + 1);
+    screen.render();
+  });
+  routeOverlay.key(['enter', 'return'], () => {
+    const route = routes[routeOverlay.selected];
     if (!route || route.id === '…') return;
     closeRouteOverlay();
     if (onRouteSelectCb) onRouteSelectCb(route.id);
   });
+
 
   screen.append(routeOverlay);
   routeOverlay.focus();
@@ -203,7 +224,7 @@ function showHelpOverlay() {
     top: 'center',
     left: 'center',
     width: 44,
-    height: 16,
+    height: 17,
     border: { type: 'line' },
     label: ' Help ',
     tags: true,
@@ -214,6 +235,7 @@ function showHelpOverlay() {
       '',
       '  {cyan-fg}r{/cyan-fg}       Open route selector',
       '  {cyan-fg}d{/cyan-fg}       Toggle inbound/outbound',
+      '  {cyan-fg}PgUp/Dn{/cyan-fg} Scroll stops list',
       '  {cyan-fg}?{/cyan-fg}       Toggle this help',
       '  {cyan-fg}← →{/cyan-fg}     Switch tabs',
       '  {cyan-fg}1-9{/cyan-fg}     Jump to tab',
