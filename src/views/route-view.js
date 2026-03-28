@@ -164,14 +164,23 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
     const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
     const line1 = padBetween(line1Left, line1Right, INNER);
 
-    // Line 2: status + stop name
-    const statusShort = {
-      'STOPPED_AT':    'at',
-      'INCOMING_AT':   '→',
-      'IN_TRANSIT_TO': '→',
-    }[bus.currentStatus] ?? '?';
-    const stopName = (stopById[bus.currentStopId]?.name ?? '').slice(0, INNER - 4);
-    const line2 = `{grey-fg}${statusShort} {white-fg}${stopName}{/white-fg}{/grey-fg}`;
+    // Line 2: status + stop name(s)
+    const toStop = stopById[bus.currentStopId];
+    const toName = toStop?.name ?? '';
+    let line2;
+    if (bus.currentStatus === 'STOPPED_AT') {
+      line2 = `{grey-fg}at {white-fg}${toName}{/white-fg}{/grey-fg}`;
+    } else {
+      const toIdx = stops.findIndex(s => s.id === bus.currentStopId);
+      const fromStop = toIdx > 0 ? stops[toIdx - 1] : null;
+      const fromName = fromStop?.name ?? '';
+      const maxHalf = Math.floor((INNER - 5) / 2); // 5 for " → " + padding
+      const from = fromName.slice(0, maxHalf);
+      const to = toName.slice(0, maxHalf);
+      line2 = fromName
+        ? `{grey-fg}{white-fg}${from}{/white-fg} → {white-fg}${to}{/white-fg}{/grey-fg}`
+        : `{grey-fg}→ {white-fg}${to}{/white-fg}{/grey-fg}`;
+    }
 
     return [line1, line2, `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`];
   });
