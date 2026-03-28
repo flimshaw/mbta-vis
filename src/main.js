@@ -1,5 +1,5 @@
 import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchStopsByIds, parseVehicle, parseStop } from './mbta-api.js';
-import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle } from './screen.js';
+import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, openRouteSelector, setActiveTab } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
 const AUTO_REFRESH_MS = 10000;
@@ -8,42 +8,41 @@ const DEFAULT_DIRECTION = 0;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
 
-let currentRoute = DEFAULT_ROUTE;
-let currentDirection = DEFAULT_DIRECTION;
-let activeView = null;
-let activeTabIndex = 0;
-let refreshTimer = null;
-let countdownTimer = null;
+// Per-tab state: [{ tabIndex, route, direction, view, refreshTimer, countdownTimer, cachedStops, cachedStopsKey, lastStatus }]
+const tabStates = [];
+let activeTabIdx = 0;
 
-// Stop cache — avoids re-fetching stops on every vehicle refresh
-let cachedStops = [];
-let cachedStopsKey = ''; // "route:direction"
-
-async function getStops(route, direction) {
-  const key = `${route}:${direction}`;
-  if (key !== cachedStopsKey) {
-    const raw = await fetchRouteStops(route, direction);
-    cachedStops = raw.map(parseStop).filter(Boolean);
-    cachedStopsKey = key;
-  }
-  return cachedStops;
+function activeTab() {
+  return tabStates[activeTabIdx];
 }
 
-async function refreshAndDisplay() {
-  setStatus(`{yellow-fg}Fetching Route ${currentRoute}...{/yellow-fg}`);
+// Whether the next route selection should open a new tab instead of switching the current one
+let newTabPending = false;
+
+async function getStops(tab, route, direction) {
+  const key = `${route}:${direction}`;
+  if (key !== tab.cachedStopsKey) {
+    const raw = await fetchRouteStops(route, direction);
+    tab.cachedStops = raw.map(parseStop).filter(Boolean);
+    tab.cachedStopsKey = key;
+  }
+  return tab.cachedStops;
+}
+
+async function refreshAndDisplay(tab) {
+  const isActive = tab === activeTab();
+  if (isActive) setStatus(`{yellow-fg}Fetching Route ${tab.route}...{/yellow-fg}`);
 
   try {
-    // Fetch vehicles and stops (stops may be cached)
     const [vehicles, stops] = await fetchWithRetry(() =>
       Promise.all([
-        fetchRouteVehicles(currentRoute, currentDirection),
-        getStops(currentRoute, currentDirection),
+        fetchRouteVehicles(tab.route, tab.direction),
+        getStops(tab, tab.route, tab.direction),
       ])
     );
 
     const buses = vehicles.map(parseVehicle).filter(Boolean);
 
-    // Fetch any vehicle stop IDs not already in the route stop list
     const routeStopIds = new Set(stops.map(s => s.id));
     const unknownIds = [...new Set(
       buses.map(b => b.currentStopId).filter(id => id && !routeStopIds.has(id))
@@ -52,53 +51,82 @@ async function refreshAndDisplay() {
       ? (await fetchStopsByIds(unknownIds)).map(parseStop).filter(Boolean)
       : [];
 
-    activeView.update(buses, stops, extraStops, currentDirection, currentRoute);
-    scheduleNextRefresh();
+    tab.view.update(buses, stops, extraStops, tab.direction, tab.route);
+    scheduleNextRefresh(tab);
 
   } catch (error) {
     const msg = error.message.includes('rate limit')
       ? 'Rate limit exceeded — retrying soon'
       : `Error: ${error.message}`;
-    setStatus(`{red-fg}${msg}{/red-fg}`);
-    scheduleNextRefresh();
+    const statusText = `{red-fg}${msg}{/red-fg}`;
+    tab.lastStatus = statusText;
+    if (tab === activeTab()) setStatus(statusText);
+    scheduleNextRefresh(tab);
   }
 }
 
-function scheduleNextRefresh() {
-  clearTimeout(refreshTimer);
-  clearInterval(countdownTimer);
+function scheduleNextRefresh(tab) {
+  clearTimeout(tab.refreshTimer);
+  clearInterval(tab.countdownTimer);
 
   let remaining = AUTO_REFRESH_MS / 1000;
-  const dir = currentDirection === 0 ? 'Outbound' : 'Inbound';
+  const dir = tab.direction === 0 ? 'Outbound' : 'Inbound';
   const statusText = () =>
-    `Route {cyan-fg}${currentRoute}{/cyan-fg} ${dir} — refreshing in {white-fg}${remaining}s{/white-fg}`;
+    `Route {cyan-fg}${tab.route}{/cyan-fg} ${dir} — refreshing in {white-fg}${remaining}s{/white-fg}`;
 
-  setStatus(statusText());
-  countdownTimer = setInterval(() => {
+  tab.lastStatus = statusText();
+  if (tab === activeTab()) setStatus(tab.lastStatus);
+
+  tab.countdownTimer = setInterval(() => {
     remaining--;
-    setStatus(statusText());
-    if (remaining <= 0) clearInterval(countdownTimer);
+    tab.lastStatus = statusText();
+    if (tab === activeTab()) setStatus(tab.lastStatus);
+    if (remaining <= 0) clearInterval(tab.countdownTimer);
   }, 1000);
 
-  refreshTimer = setTimeout(() => {
-    clearInterval(countdownTimer);
-    refreshAndDisplay();
+  tab.refreshTimer = setTimeout(() => {
+    clearInterval(tab.countdownTimer);
+    refreshAndDisplay(tab);
   }, AUTO_REFRESH_MS);
 }
 
 function switchRoute(routeId) {
-  currentRoute = routeId;
-  updateTabLabel(activeTabIndex, `Route ${routeId}`);
-  clearTimeout(refreshTimer);
-  clearInterval(countdownTimer);
-  refreshAndDisplay();
+  const tab = activeTab();
+  tab.route = routeId;
+  updateTabLabel(tab.tabIndex, `Route ${routeId}`);
+  clearTimeout(tab.refreshTimer);
+  clearInterval(tab.countdownTimer);
+  refreshAndDisplay(tab);
 }
 
 function toggleDirection() {
-  currentDirection = currentDirection === 0 ? 1 : 0;
-  clearTimeout(refreshTimer);
-  clearInterval(countdownTimer);
-  refreshAndDisplay();
+  const tab = activeTab();
+  tab.direction = tab.direction === 0 ? 1 : 0;
+  clearTimeout(tab.refreshTimer);
+  clearInterval(tab.countdownTimer);
+  refreshAndDisplay(tab);
+}
+
+function createTab(routeId, direction) {
+  const view = createRouteView();
+  const tabIndex = addTab(`Route ${routeId}`, view);
+  const tab = {
+    tabIndex,
+    route: routeId,
+    direction,
+    view,
+    refreshTimer: null,
+    countdownTimer: null,
+    cachedStops: [],
+    cachedStopsKey: '',
+    lastStatus: '',
+  };
+  tabStates.push(tab);
+  // Switch to the new tab
+  activeTabIdx = tabStates.length - 1;
+  setActiveTab(tabIndex);
+  refreshAndDisplay(tab);
+  return tab;
 }
 
 async function fetchWithRetry(fetchFn) {
@@ -120,19 +148,36 @@ function sleep(ms) {
 
 export async function main() {
   const args = process.argv.slice(2);
-  currentRoute = args[0] || DEFAULT_ROUTE;
-  currentDirection = args[1] !== undefined ? parseInt(args[1]) : DEFAULT_DIRECTION;
+  const initialRoute = args[0] || DEFAULT_ROUTE;
+  const initialDirection = args[1] !== undefined ? parseInt(args[1]) : DEFAULT_DIRECTION;
 
   initScreen();
-  onRouteSelect(switchRoute);
+
+  onRouteSelect(routeId => {
+    if (newTabPending) {
+      newTabPending = false;
+      createTab(routeId, DEFAULT_DIRECTION);
+    } else {
+      switchRoute(routeId);
+    }
+  });
+
   onDirectionToggle(toggleDirection);
 
-  activeView = createRouteView();
-  activeTabIndex = addTab(`Route ${currentRoute}`, activeView);
+  onNewTab(() => {
+    newTabPending = true;
+    openRouteSelector();
+  });
+
+  onTabSwitch(index => {
+    activeTabIdx = index;
+    const tab = tabStates[index];
+    if (tab?.lastStatus) setStatus(tab.lastStatus);
+  });
 
   fetchBusRoutes().then(setRouteList).catch(() => {});
 
-  await refreshAndDisplay();
+  createTab(initialRoute, initialDirection);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

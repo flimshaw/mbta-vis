@@ -10,6 +10,8 @@ let helpOverlay = null;
 let cachedRoutes = [];
 let onRouteSelectCb = null;
 let onDirectionToggleCb = null;
+let onNewTabCb = null;
+let onTabSwitchCb = null;
 
 /**
  * Initialize the blessed screen. Call once at startup.
@@ -47,6 +49,7 @@ export function initScreen() {
 
   screen.key(['q', 'C-c'], () => { screen.destroy(); process.exit(0); });
   screen.key('r', () => showRouteOverlay());
+  screen.key('n', () => { if (onNewTabCb) onNewTabCb(); });
   screen.key('d', () => { if (onDirectionToggleCb) onDirectionToggleCb(); });
   screen.key('?', () => showHelpOverlay());
   screen.key(['left', 'S-tab'], () => setActiveTab(activeTabIndex - 1));
@@ -90,6 +93,7 @@ export function setActiveTab(index) {
   tabs[activeTabIndex].view.box.show();
   renderTabBar();
   screen.render();
+  if (onTabSwitchCb) onTabSwitchCb(activeTabIndex);
 }
 
 export function getActiveTabIndex() {
@@ -141,6 +145,18 @@ export function onRouteSelect(callback) {
 
 export function onDirectionToggle(callback) {
   onDirectionToggleCb = callback;
+}
+
+export function onNewTab(callback) {
+  onNewTabCb = callback;
+}
+
+export function onTabSwitch(callback) {
+  onTabSwitchCb = callback;
+}
+
+export function openRouteSelector() {
+  showRouteOverlay();
 }
 
 
@@ -224,7 +240,7 @@ function showHelpOverlay() {
     top: 'center',
     left: 'center',
     width: 44,
-    height: 17,
+    height: 18,
     border: { type: 'line' },
     label: ' Help ',
     tags: true,
@@ -233,6 +249,7 @@ function showHelpOverlay() {
       '',
       '  {bold}Keyboard Shortcuts{/bold}',
       '',
+      '  {cyan-fg}n{/cyan-fg}       New tab',
       '  {cyan-fg}r{/cyan-fg}       Open route selector',
       '  {cyan-fg}d{/cyan-fg}       Toggle inbound/outbound',
       '  {cyan-fg}PgUp/Dn{/cyan-fg} Scroll stops list',
