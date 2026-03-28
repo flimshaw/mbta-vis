@@ -1,4 +1,4 @@
-import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchStopsByIds, parseVehicle, parseStop } from './mbta-api.js';
+import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchSubwayRoutes, fetchStopsByIds, parseVehicle, parseStop } from './mbta-api.js';
 import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, openRouteSelector, setActiveTab } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
@@ -175,7 +175,12 @@ export async function main() {
     if (tab?.lastStatus) setStatus(tab.lastStatus);
   });
 
-  fetchBusRoutes().then(setRouteList).catch(() => {});
+  Promise.all([fetchBusRoutes(), fetchSubwayRoutes()])
+    .then(([bus, subway]) => setRouteList([
+      { label: 'Bus',    routes: bus    },
+      { label: 'Subway', routes: subway },
+    ]))
+    .catch(() => {});
 
   createTab(initialRoute, initialDirection);
 }

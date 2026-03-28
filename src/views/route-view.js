@@ -33,7 +33,7 @@ export function createRouteView() {
     height: 4,
     tags: true,
     border: { type: 'line' },
-    label: ' Buses ',
+    label: ' Vehicles ',
     style: { border: { fg: 'grey' }, bg: 'black' },
   });
   // Content area — all route rendering goes here; this is what gets cleared
@@ -79,7 +79,7 @@ export function createRouteView() {
     const scrollInfo = stops.length > pageSize
       ? `  {grey-fg}[${scrollOffset + 1}–${Math.min(scrollOffset + pageSize, stops.length)}/${stops.length}]{/grey-fg}`
       : '';
-    const header = `{bold}{cyan-fg}MBTA Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} bus(es) active{/grey-fg}${scrollInfo}`;
+    const header = `{bold}{cyan-fg}MBTA Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} vehicle(s) active{/grey-fg}${scrollInfo}`;
 
     // Clear only the content area, not infoBox
     contentBox.children.slice().forEach(c => c.destroy());
@@ -92,7 +92,7 @@ export function createRouteView() {
     if (buses.length === 0) {
       contentBox.append(blessed.box({
         top: 2, left: 0, width: '100%', height: 3,
-        tags: true, content: '\n {yellow-fg}No active buses on this route.{/yellow-fg}',
+        tags: true, content: '\n {yellow-fg}No active vehicles on this route.{/yellow-fg}',
       }));
       updateInfoBox([], stops, extraStops, [], colorMap, infoBox);
       screen.render();
@@ -153,69 +153,112 @@ const OCCUPANCY_LEVELS = [
   { status: 'CRUSHED_STANDING_ROOM_ONLY', filled: 4, color: 'red'     },
   { status: 'FULL',                       filled: 5, color: 'red'     },
   { status: 'NOT_ACCEPTING_PASSENGERS',   filled: 5, color: 'red'     },
+  { status: 'NO_DATA_AVAILABLE',          filled: 0, color: 'grey'    },
 ];
 const BAR_TOTAL = 5;
 
 function occupancyBar(status) {
+  if (status === 'NOT_ACCEPTING_PASSENGERS') return '{red-fg}[×××××]{/red-fg}';
   const level = OCCUPANCY_LEVELS.find(l => l.status === status);
   if (!level) return '{grey-fg}[·····]{/grey-fg}';
   const filled = '█'.repeat(level.filled) + '·'.repeat(BAR_TOTAL - level.filled);
   return `{${level.color}-fg}[${filled}]{/${level.color}-fg}`;
 }
 
+function miniCarBar(carriage) {
+  if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
+    return '{red-fg}[×××××]{/red-fg}';
+  }
+  if (!carriage.occupancyStatus || carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
+    return '{grey-fg}[·····]{/grey-fg}';
+  }
+  const level = OCCUPANCY_LEVELS.find(l => l.status === carriage.occupancyStatus);
+  // Prefer status-based fill so color and fill are always consistent.
+  // Fall back to percentage only when status is absent or carries no fill info.
+  const filled = level
+    ? level.filled
+    : carriage.occupancyPercentage != null
+      ? Math.min(5, Math.round(carriage.occupancyPercentage / 20))
+      : 0;
+  const color = level?.color ?? 'grey';
+  const bar = '█'.repeat(filled) + '·'.repeat(5 - filled);
+  return `{${color}-fg}[${bar}]{/${color}-fg}`;
+}
+
+function stopStatusLine(bus, stops, extraStopById, stopById, INNER) {
+  const vehicleStop = extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId];
+  const toName = vehicleStop?.name ?? '';
+  const berthDetail = extraStopById[bus.currentStopId]?.platformName ?? null;
+  const toDisplay = berthDetail ? `${toName} (${berthDetail})` : toName;
+
+  if (bus.currentStatus === 'STOPPED_AT') {
+    return `{grey-fg}at {white-fg}${toDisplay}{/white-fg}{/grey-fg}`;
+  }
+  const toIdx = stops.findIndex(s => s.id === bus.currentStopId);
+  const fromStop = toIdx > 0 ? stops[toIdx - 1] : null;
+  const fromName = fromStop?.name ?? '';
+  const maxHalf = Math.floor((INNER - 5) / 2);
+  const from = fromName.slice(0, maxHalf);
+  const to = toDisplay.slice(0, maxHalf);
+  return fromName
+    ? `{grey-fg}{white-fg}${from}{/white-fg} → {white-fg}${to}{/white-fg}{/grey-fg}`
+    : `{grey-fg}→ {white-fg}${to}{/white-fg}{/grey-fg}`;
+}
+
+function renderBusCard(bus, colorMap, stops, extraStopById, stopById, INNER) {
+  const color = colorMap.get(bus.id) || 'white';
+  const char = busMarker(bus).char;
+  const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
+  const label = (bus.label || bus.id).slice(0, 6);
+  const speedStr = `${bus.speed != null ? Math.round(bus.speed) : 0}km/h`;
+
+  const occupancyText = bus.occupancyStatus ? `{grey-fg}${formatOccupancy(bus.occupancyStatus)}{/grey-fg}` : '';
+  const line1Left = `{${color}-fg}${char} #${label}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`;
+  const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
+  const line1 = padBetween(line1Left, line1Right, INNER);
+  const line2 = stopStatusLine(bus, stops, extraStopById, stopById, INNER);
+  return [line1, line2];
+}
+
+function renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, INNER) {
+  const color = colorMap.get(bus.id) || 'white';
+  const char = busMarker(bus).char;
+  const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
+  const label = (bus.label || bus.id).slice(0, 10);
+  const speedStr = `${bus.speed != null ? Math.round(bus.speed) : 0}km/h`;
+
+  const occupancyText = bus.occupancyStatus ? `{grey-fg}${formatOccupancy(bus.occupancyStatus)}{/grey-fg}` : '';
+  const line1Left = `{${color}-fg}${char} #${label}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`;
+  const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
+  const line1 = padBetween(line1Left, line1Right, INNER);
+
+  const carBars = bus.carriages.map((c, i) => `{grey-fg}${i + 1}{/grey-fg}${miniCarBar(c)}`).join(' ');
+  const line2 = carBars || '{grey-fg}no car data{/grey-fg}';
+
+  const line3 = stopStatusLine(bus, stops, extraStopById, stopById, INNER);
+  return [line1, line2, line3];
+}
+
 function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox) {
   if (buses.length === 0) {
     infoBox.height = 3;
-    infoBox.setContent('{grey-fg}No buses{/grey-fg}');
+    infoBox.setContent('{grey-fg}No vehicles{/grey-fg}');
     return;
   }
 
-  // Route stops for segment placement; extraStops for vehicle berth/platform names
   const stopById = {};
   stops.forEach(s => { stopById[s.id] = s; });
   const extraStopById = {};
   extraStops.forEach(s => { extraStopById[s.id] = s; });
 
   const INNER = 66; // infoBox width (68) minus 2 for border
+  const divider = `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`;
 
   const cards = buses.flatMap(bus => {
-    const color = colorMap.get(bus.id) || 'white';
-    const char = busMarker(bus).char;
-    const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
-    const label = (bus.label || bus.id).slice(0, 6);
-    const speedKmh = bus.speed != null ? Math.round(bus.speed) : 0;
-    const speedStr = `${speedKmh}km/h`;
-
-    // Line 1: marker + label + revenue + occupancy bar + speed
-    const line1Left = `{${color}-fg}${char} Bus ${label}{/${color}-fg} ${revenue} ${occupancyBar(bus.occupancyStatus)}`;
-    const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
-    const line1 = padBetween(line1Left, line1Right, INNER);
-
-    // Line 2: status + stop name(s)
-    // Prefer the exact vehicle stop (berth/platform) for name; fall back to route stop
-    const vehicleStop = extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId];
-    const toName = vehicleStop?.name ?? '';
-    // For berths, also show the platform detail if available
-    const berthDetail = extraStopById[bus.currentStopId]?.platformName ?? null;
-    const toDisplay = berthDetail ? `${toName} (${berthDetail})` : toName;
-
-    let line2;
-    if (bus.currentStatus === 'STOPPED_AT') {
-      line2 = `{grey-fg}at {white-fg}${toDisplay}{/white-fg}{/grey-fg}`;
-    } else {
-      // For in-transit, find the destination in the route stops list for from/to
-      const toIdx = stops.findIndex(s => s.id === bus.currentStopId);
-      const fromStop = toIdx > 0 ? stops[toIdx - 1] : null;
-      const fromName = fromStop?.name ?? '';
-      const maxHalf = Math.floor((INNER - 5) / 2); // 5 for " → " + padding
-      const from = fromName.slice(0, maxHalf);
-      const to = toDisplay.slice(0, maxHalf);
-      line2 = fromName
-        ? `{grey-fg}{white-fg}${from}{/white-fg} → {white-fg}${to}{/white-fg}{/grey-fg}`
-        : `{grey-fg}→ {white-fg}${to}{/white-fg}{/grey-fg}`;
-    }
-
-    return [line1, line2, `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`];
+    const cardLines = bus.carriages.length > 0
+      ? renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, INNER)
+      : renderBusCard(bus, colorMap, stops, extraStopById, stopById, INNER);
+    return [...cardLines, divider];
   });
 
   // Remove trailing divider

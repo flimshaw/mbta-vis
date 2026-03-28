@@ -46,11 +46,12 @@ export async function fetchRouteVehicles(routeNumber, directionId = null) {
 }
 
 /**
- * Fetch all bus routes
+ * Fetch routes by MBTA route type filter string (e.g. '3' or '0,1')
+ * @param {string} typeFilter
  * @returns {Promise<Array>} - Array of {id, name} objects sorted by id
  */
-export async function fetchBusRoutes() {
-  const data = await fetchFromApi('/routes', { 'filter[type]': '3' });
+async function fetchRoutesByType(typeFilter) {
+  const data = await fetchFromApi('/routes', { 'filter[type]': typeFilter });
   return (data.data || [])
     .map(r => ({ id: r.id, name: r.attributes?.long_name || r.id }))
     .sort((a, b) => {
@@ -58,6 +59,14 @@ export async function fetchBusRoutes() {
       if (!isNaN(na) && !isNaN(nb)) return na - nb;
       return a.id.localeCompare(b.id);
     });
+}
+
+export async function fetchBusRoutes() {
+  return fetchRoutesByType('3');
+}
+
+export async function fetchSubwayRoutes() {
+  return fetchRoutesByType('0,1'); // light rail (0) + heavy rail (1)
 }
 
 /**
@@ -109,10 +118,15 @@ export function parseVehicle(vehicle) {
     currentStopSequence: attrs.current_stop_sequence,
     currentStopId: vehicle.relationships?.stop?.data?.id || null,
     lastUpdated: attrs.updated_at || null,
-    occupancyStatus: attrs.occupancy_status || 'UNKNOWN',
+    occupancyStatus: attrs.occupancy_status || null,
     currentStatus: attrs.current_status || 'UNKNOWN',
     speed: attrs.speed,
     revenue: attrs.revenue === 'REVENUE',
+    carriages: (attrs.carriages || []).map(c => ({
+      label: c.label,
+      occupancyStatus: c.occupancy_status,
+      occupancyPercentage: c.occupancy_percentage,
+    })),
   };
 }
 
