@@ -69,6 +69,79 @@ export function formatDistance(meters) {
 }
 
 /**
+ * Find which segment a bus belongs to (closest segment by distance)
+ * @param {object} bus - Parsed bus object with latitude/longitude
+ * @param {Array} stops - Array of parsed stop objects
+ * @returns {object|null} - { segmentIndex, proportion, stop1, stop2 } or null
+ */
+export function findBusSegment(bus, stops) {
+  if (!bus?.latitude || !bus?.longitude || !stops || stops.length < 2) return null;
+
+  let bestSegment = null;
+  let bestDist = Infinity;
+
+  for (let i = 0; i < stops.length - 1; i++) {
+    const stop1 = stops[i];
+    const stop2 = stops[i + 1];
+    if (!stop1?.latitude || !stop2?.latitude) continue;
+
+    const d1 = calculateDistance(bus.latitude, bus.longitude, stop1.latitude, stop1.longitude);
+    const d2 = calculateDistance(bus.latitude, bus.longitude, stop2.latitude, stop2.longitude);
+
+    if (Math.min(d1, d2) < bestDist) {
+      bestDist = Math.min(d1, d2);
+      bestSegment = {
+        segmentIndex: i,
+        stop1,
+        stop2,
+        proportion: calculatePositionProportion(
+          bus.latitude, bus.longitude,
+          stop1.latitude, stop1.longitude,
+          stop2.latitude, stop2.longitude
+        ),
+      };
+    }
+  }
+
+  return bestSegment;
+}
+
+/**
+ * Place all buses onto their segments, returning clean placement objects.
+ * Avoids mutating bus objects.
+ * @param {Array} buses - Parsed bus objects
+ * @param {Array} stops - Parsed stop objects
+ * @returns {Array} - [{ bus, segmentIndex, proportion, stopIdx }]
+ */
+export function placeBuses(buses, stops) {
+  return buses.flatMap(bus => {
+    const seg = findBusSegment(bus, stops);
+    if (!seg) return [];
+    const { segmentIndex, proportion } = seg;
+    // For stopped/incoming buses, snap to nearest stop index
+    const stopIdx =
+      bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT'
+        ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)
+        : segmentIndex;
+    return [{ bus, segmentIndex, proportion, stopIdx }];
+  });
+}
+
+/**
+ * Get display marker character and color for a bus based on its status
+ * @param {object} bus - Parsed bus object
+ * @returns {{ char: string, color: string }}
+ */
+export function busMarker(bus) {
+  switch (bus.currentStatus) {
+    case 'STOPPED_AT':    return { char: '■', color: 'yellow' };
+    case 'INCOMING_AT':   return { char: '▷', color: 'cyan' };
+    case 'IN_TRANSIT_TO': return { char: '▶', color: 'green' };
+    default:              return { char: '▶', color: 'white' };
+  }
+}
+
+/**
  * Format time for display
  * @param {string} isoString - ISO 8601 timestamp
  * @returns {string} - Formatted time string
