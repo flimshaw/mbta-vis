@@ -170,18 +170,19 @@ function showRouteOverlay() {
     items: routes.map(r => `  ${r.id.padEnd(6)} ${r.name}`),
   });
 
-  routeOverlay.key(['escape', 'r'], () => {
+  const closeRouteOverlay = () => {
+    if (!routeOverlay) return;
     routeOverlay.destroy();
     routeOverlay = null;
     screen.render();
-  });
+  };
+
+  routeOverlay.key(['escape', 'r'], closeRouteOverlay);
 
   routeOverlay.on('select', (_item, index) => {
     const route = routes[index];
     if (!route || route.id === '…') return;
-    routeOverlay.destroy();
-    routeOverlay = null;
-    screen.render();
+    closeRouteOverlay();
     if (onRouteSelectCb) onRouteSelectCb(route.id);
   });
 
@@ -225,11 +226,14 @@ function showHelpOverlay() {
     ].join('\n'),
   });
 
-  helpOverlay.key(['escape', '?'], () => {
+  const closeHelpOverlay = () => {
+    if (!helpOverlay) return;
     helpOverlay.destroy();
     helpOverlay = null;
     screen.render();
-  });
+  };
+
+  helpOverlay.key(['escape', '?'], closeHelpOverlay);
 
   screen.append(helpOverlay);
   helpOverlay.focus();
