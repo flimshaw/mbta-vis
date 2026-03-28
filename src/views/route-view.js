@@ -47,6 +47,9 @@ export function createRouteView() {
   box.append(contentBox);
   box.append(infoBox); // appended after contentBox so it renders on top
 
+  // Re-render on terminal resize using the last known data
+  getScreen().on('resize', () => { if (lastUpdateArgs) update(...lastUpdateArgs); });
+
   function update(buses, stops, extraStops, directionId, routeNumber = '87', predictions = {}) {
     lastUpdateArgs = [buses, stops, extraStops, directionId, routeNumber, predictions];
     const screen = getScreen();
@@ -63,6 +66,7 @@ export function createRouteView() {
     buses.forEach(b => busColor(b.id, colorMap));
 
     const placed = placeBuses(buses, stops);
+    const placedByVehicleId = Object.fromEntries(placed.map(p => [p.bus.id, p]));
     const placedIds = new Set(placed.map(p => p.bus.id));
     const unplaced = buses.filter(b => !placedIds.has(b.id));
 
@@ -71,8 +75,10 @@ export function createRouteView() {
       (segmentBuses[p.segmentIndex] ??= []).push(p);
     });
 
-    const numCols = screenWidth >= 180 ? 3 : screenWidth >= 110 ? 2 : 1;
-    const colWidth = Math.floor(screenWidth / numCols);
+    // Single column (left half) unless the full stop list exceeds one column's height,
+    // in which case use two columns each at half width.
+    const numCols = stops.length > pageSize ? 2 : 1;
+    const colWidth = Math.floor(screenWidth / 2);
     const stopsPerCol = Math.ceil(visibleStops.length / numCols);
 
     const dir = directionId === 0 ? 'Outbound' : 'Inbound';
@@ -94,7 +100,7 @@ export function createRouteView() {
         top: 2, left: 0, width: '100%', height: 3,
         tags: true, content: '\n {yellow-fg}No active vehicles on this route.{/yellow-fg}',
       }));
-      updateInfoBox([], stops, extraStops, [], colorMap, infoBox, {});
+      updateInfoBox([], stops, extraStops, [], colorMap, infoBox, {}, {});
       screen.render();
       return;
     }
@@ -114,8 +120,8 @@ export function createRouteView() {
         }
       });
 
-      const boxWidth = col < numCols - 1 ? colWidth : screenWidth - col * colWidth;
-      const innerWidth = numCols > 1 ? boxWidth - 2 : boxWidth;
+      const boxWidth = colWidth;
+      const innerWidth = boxWidth - 2;
       const hasMoreStops = (scrollOffset + endIdx) < stops.length;
 
       contentBox.append(blessed.box({
@@ -125,12 +131,12 @@ export function createRouteView() {
         height: contentHeight - 2,
         tags: true,
         content: renderColumn(colStops, localSegBuses, innerWidth, hasMoreStops, colorMap, globalStartIdx).join('\n'),
-        border: numCols > 1 ? { type: 'line' } : undefined,
-        style: numCols > 1 ? { border: { fg: 'grey' } } : undefined,
+        border: { type: 'line' },
+        style: { border: { fg: 'grey' } },
       }));
     }
 
-    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions);
+    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions, placedByVehicleId);
     screen.render();
   }
 
@@ -175,21 +181,59 @@ function fmtEta(isoTime) {
   return `${diffMin}m`;
 }
 
-// Find the next upcoming prediction for a vehicle and return a display string,
-// or null if none. Prefers arrival_time; falls back to departure_time.
-function nextEtaLine(vehiclePredictions, stopById, extraStopById) {
-  if (!vehiclePredictions?.length) return null;
-  const now = Date.now();
-  for (const p of vehiclePredictions) {
+// Return the ETA string for a prediction matching targetStopName, or null.
+function etaForStop(vehiclePreds, targetStopName, stopById, extraStopById) {
+  for (const p of vehiclePreds) {
+    const s = stopById[p.stopId] ?? extraStopById[p.stopId];
+    if (!s || s.name !== targetStopName) continue;
     const time = p.arrivalTime ?? p.departureTime;
-    if (!time || new Date(time) < now) continue;
     const eta = fmtEta(time);
-    if (!eta) continue;
-    const stop = stopById[p.stopId] ?? extraStopById[p.stopId];
-    if (!stop) continue; // skip predictions for stops we can't name
-    return `{grey-fg}next: {white-fg}${stop.name}{/white-fg} in {cyan-fg}${eta}{/cyan-fg}{/grey-fg}`;
+    if (eta) return eta;
   }
   return null;
+}
+
+// Build 1–2 status lines for a vehicle card, using placement indices so stop
+// names are always sourced from the route stop list (not child stop IDs).
+function statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER) {
+  if (!placement) {
+    // Unplaced vehicle — best-effort from raw stop lookup
+    const s = extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId];
+    return [`{grey-fg}→ {white-fg}${s?.name ?? ''}{/white-fg}{/grey-fg}`];
+  }
+
+  if (bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT') {
+    const currentStop = stops[placement.stopIdx];
+    const line1 = `{grey-fg}at {white-fg}${currentStop?.name ?? ''}{/white-fg}{/grey-fg}`;
+
+    // Next: first future prediction for a stop with a different name than current
+    const currentName = currentStop?.name ?? '';
+    for (const p of vehiclePreds) {
+      const s = stopById[p.stopId] ?? extraStopById[p.stopId];
+      if (!s || s.name === currentName) continue;
+      const time = p.arrivalTime ?? p.departureTime;
+      const eta = fmtEta(time);
+      if (!eta) continue;
+      return [line1, `{grey-fg}next: {white-fg}${s.name}{/white-fg} in {cyan-fg}${eta}{/cyan-fg}{/grey-fg}`];
+    }
+    return [line1];
+  }
+
+  // IN_TRANSIT_TO / UNKNOWN — show from → dest with inline ETA
+  const fromStop = stops[placement.segmentIndex];
+  const destStop = stops[placement.segmentIndex + 1];
+  const destName = destStop?.name ?? '';
+  const eta = etaForStop(vehiclePreds, destName, stopById, extraStopById);
+  const etaSuffix = eta ? ` {cyan-fg}in ${eta}{/cyan-fg}` : '';
+
+  const maxHalf = Math.floor((INNER - 5) / 2);
+  const from = (fromStop?.name ?? '').slice(0, maxHalf);
+  const dest = destName.slice(0, maxHalf);
+
+  const line = from
+    ? `{grey-fg}{white-fg}${from}{/white-fg} → {white-fg}${dest}{/white-fg}${etaSuffix}{/grey-fg}`
+    : `{grey-fg}→ {white-fg}${dest}{/white-fg}${etaSuffix}{/grey-fg}`;
+  return [line];
 }
 
 function miniCarBar(carriage) {
@@ -212,27 +256,8 @@ function miniCarBar(carriage) {
   return `{${color}-fg}[${bar}]{/${color}-fg}`;
 }
 
-function stopStatusLine(bus, stops, extraStopById, stopById, INNER) {
-  const vehicleStop = extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId];
-  const toName = vehicleStop?.name ?? '';
-  const berthDetail = extraStopById[bus.currentStopId]?.platformName ?? null;
-  const toDisplay = berthDetail ? `${toName} (${berthDetail})` : toName;
 
-  if (bus.currentStatus === 'STOPPED_AT') {
-    return `{grey-fg}at {white-fg}${toDisplay}{/white-fg}{/grey-fg}`;
-  }
-  const toIdx = stops.findIndex(s => s.id === bus.currentStopId);
-  const fromStop = toIdx > 0 ? stops[toIdx - 1] : null;
-  const fromName = fromStop?.name ?? '';
-  const maxHalf = Math.floor((INNER - 5) / 2);
-  const from = fromName.slice(0, maxHalf);
-  const to = toDisplay.slice(0, maxHalf);
-  return fromName
-    ? `{grey-fg}{white-fg}${from}{/white-fg} → {white-fg}${to}{/white-fg}{/grey-fg}`
-    : `{grey-fg}→ {white-fg}${to}{/white-fg}{/grey-fg}`;
-}
-
-function renderBusCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
+function renderBusCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
   const color = colorMap.get(bus.id) || 'white';
   const char = busMarker(bus).char;
   const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
@@ -243,12 +268,10 @@ function renderBusCard(bus, colorMap, stops, extraStopById, stopById, vehiclePre
   const line1Left = `{${color}-fg}${char} #${label}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`;
   const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
   const line1 = padBetween(line1Left, line1Right, INNER);
-  const line2 = stopStatusLine(bus, stops, extraStopById, stopById, INNER);
-  const etaLine = nextEtaLine(vehiclePreds, stopById, extraStopById);
-  return etaLine ? [line1, line2, etaLine] : [line1, line2];
+  return [line1, ...statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER)];
 }
 
-function renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
+function renderSubwayCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
   const color = colorMap.get(bus.id) || 'white';
   const char = busMarker(bus).char;
   const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
@@ -263,12 +286,10 @@ function renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, vehicle
   const carBars = bus.carriages.map((c, i) => `{grey-fg}${i + 1}{/grey-fg}${miniCarBar(c)}`).join(' ');
   const line2 = carBars || '{grey-fg}no car data{/grey-fg}';
 
-  const line3 = stopStatusLine(bus, stops, extraStopById, stopById, INNER);
-  const etaLine = nextEtaLine(vehiclePreds, stopById, extraStopById);
-  return etaLine ? [line1, line2, line3, etaLine] : [line1, line2, line3];
+  return [line1, line2, ...statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER)];
 }
 
-function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions) {
+function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions, placedByVehicleId) {
   if (buses.length === 0) {
     infoBox.height = 3;
     infoBox.setContent('{grey-fg}No vehicles{/grey-fg}');
@@ -285,9 +306,10 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, pr
 
   const cards = buses.flatMap(bus => {
     const vehiclePreds = predictions[bus.id] ?? [];
+    const placement = placedByVehicleId[bus.id] ?? null;
     const cardLines = bus.carriages.length > 0
-      ? renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER)
-      : renderBusCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER);
+      ? renderSubwayCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER)
+      : renderBusCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER);
     return [...cardLines, divider];
   });
 

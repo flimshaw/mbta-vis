@@ -46,7 +46,8 @@ async function refreshAndDisplay(tab) {
 
     const routeStopIds = new Set(stops.map(s => s.id));
     const unknownIds = [...new Set(
-      buses.map(b => b.currentStopId).filter(id => id && !routeStopIds.has(id))
+      [...buses.map(b => b.currentStopId), ...rawPredictions.map(p => p.stopId)]
+        .filter(id => id && !routeStopIds.has(id))
     )];
     const extraStops = unknownIds.length > 0
       ? (await fetchStopsByIds(unknownIds)).map(parseStop).filter(Boolean)
