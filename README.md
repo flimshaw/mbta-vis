@@ -2,7 +2,7 @@
 
 A CLI tool that fetches real-time bus data for MBTA Route 87 and displays an ASCII visualization of all active buses along their route.
 
-![screenshot](./screenshot.png)
+![screenshot](./screenshot.jpg)
 
 ## Overview
 
