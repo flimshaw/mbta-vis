@@ -93,10 +93,29 @@ export function createRouteView() {
       }
     });
 
+    // Build stopName → earliest ETA string from predictions, for all vehicles
+    const stopEtas = {};
+    const extraStopById = Object.fromEntries(extraStops.map(s => [s.id, s]));
+    const routeStopById = Object.fromEntries(stops.map(s => [s.id, s]));
+    for (const vehiclePreds of Object.values(predictions)) {
+      for (const p of vehiclePreds) {
+        const time = p.arrivalTime ?? p.departureTime;
+        if (!time) continue;
+        const s = routeStopById[p.stopId] ?? extraStopById[p.stopId];
+        if (!s) continue;
+        const eta = fmtEta(time);
+        if (!eta) continue;
+        // Keep the earliest ETA per stop name
+        if (!stopEtas[s.name] || eta === 'now' || (stopEtas[s.name] !== 'now' && parseInt(eta) < parseInt(stopEtas[s.name]))) {
+          stopEtas[s.name] = eta;
+        }
+      }
+    }
+
     const hasMoreStops = (scrollOffset + pageSize) < stops.length;
     const stopLines = buses.length === 0
       ? ['{yellow-fg}No active vehicles.{/yellow-fg}']
-      : renderColumn(visibleStops, localSegBuses, leftInnerWidth, hasMoreStops, colorMap, scrollOffset);
+      : renderColumn(visibleStops, localSegBuses, leftInnerWidth, hasMoreStops, colorMap, scrollOffset, stopEtas);
 
     leftPane.setContent('\n ' + header + '\n' + stopLines.join('\n'));
 
@@ -300,7 +319,7 @@ function padBetween(left, right, totalWidth) {
   return left + ' '.repeat(gap) + right;
 }
 
-function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0) {
+function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}) {
   const LABEL_WIDTH = Math.floor(innerWidth / 2) - 2;
   const trackWidth = Math.max(4, innerWidth - LABEL_WIDTH - 3);
   const lines = [];
@@ -318,11 +337,15 @@ function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, col
       p => p.bus.currentStatus === 'IN_TRANSIT_TO' || p.bus.currentStatus === 'UNKNOWN'
     );
 
-    const rawName = stop.name.length > LABEL_WIDTH
-      ? stop.name.slice(0, LABEL_WIDTH - 1) + '…'
-      : stop.name.padEnd(LABEL_WIDTH);
-
     const hasActivity = atStop.length > 0 || inTransit.length > 0;
+
+    // Build label: name + ETA hint, both fitting within LABEL_WIDTH
+    const eta = stopEtas[stop.name];
+    const etaStr = eta ? `(${eta})` : '';
+    const maxNameLen = etaStr ? LABEL_WIDTH - etaStr.length - 1 : LABEL_WIDTH;
+    const name = stop.name.length > maxNameLen
+      ? stop.name.slice(0, maxNameLen - 1) + '…'
+      : stop.name;
 
     let marker = '{grey-fg}◉{/grey-fg}';
     if (atStop.length > 0) {
@@ -331,9 +354,11 @@ function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, col
       marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
     }
 
-    const nameTag = hasActivity
-      ? `{white-fg}${rawName}{/white-fg}`
-      : `{grey-fg}${rawName}{/grey-fg}`;
+    const nameColor = hasActivity ? 'white' : 'grey';
+    const etaTag = etaStr
+      ? (eta === 'now' ? `{cyan-fg}${etaStr}{/cyan-fg}` : `{grey-fg}${etaStr}{/grey-fg}`)
+      : '';
+    const nameTag = `{${nameColor}-fg}${name.padEnd(LABEL_WIDTH - (etaStr ? etaStr.length + 1 : 0))}{/${nameColor}-fg}${etaStr ? ' ' + etaTag : ''}`;
 
     let trackPart = '';
     if (!(i === stops.length - 1 && !hasMoreStops)) {
