@@ -115,10 +115,33 @@ export function findBusSegment(bus, stops) {
  */
 export function placeBuses(buses, stops) {
   return buses.flatMap(bus => {
+    // Prefer stop-ID-based placement: the API tells us exactly which stop the
+    // vehicle is at or heading to, which is far more reliable than GPS nearest-segment.
+    const destIdx = stops.findIndex(s => s.id === bus.currentStopId);
+
+    if (destIdx >= 0) {
+      if (bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT') {
+        return [{ bus, segmentIndex: destIdx, proportion: 0, stopIdx: destIdx }];
+      }
+      // IN_TRANSIT_TO / UNKNOWN: vehicle is between destIdx-1 and destIdx
+      if (destIdx > 0) {
+        const stop1 = stops[destIdx - 1];
+        const stop2 = stops[destIdx];
+        const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
+          ? calculatePositionProportion(
+              bus.latitude, bus.longitude,
+              stop1.latitude, stop1.longitude,
+              stop2.latitude, stop2.longitude,
+            )
+          : 0.5;
+        return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx - 1 }];
+      }
+    }
+
+    // Fallback: currentStopId is a child stop not in the route list — use GPS.
     const seg = findBusSegment(bus, stops);
     if (!seg) return [];
     const { segmentIndex, proportion } = seg;
-    // For stopped/incoming buses, snap to nearest stop index
     const stopIdx =
       bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT'
         ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)

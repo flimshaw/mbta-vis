@@ -1,4 +1,4 @@
-import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchSubwayRoutes, fetchStopsByIds, parseVehicle, parseStop } from './mbta-api.js';
+import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchSubwayRoutes, fetchStopsByIds, fetchRoutePredictions, parseVehicle, parseStop } from './mbta-api.js';
 import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, openRouteSelector, setActiveTab } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
@@ -34,10 +34,11 @@ async function refreshAndDisplay(tab) {
   if (isActive) setStatus(`{yellow-fg}Fetching Route ${tab.route}...{/yellow-fg}`);
 
   try {
-    const [vehicles, stops] = await fetchWithRetry(() =>
+    const [vehicles, stops, rawPredictions] = await fetchWithRetry(() =>
       Promise.all([
         fetchRouteVehicles(tab.route, tab.direction),
         getStops(tab, tab.route, tab.direction),
+        fetchRoutePredictions(tab.route, tab.direction),
       ])
     );
 
@@ -51,7 +52,16 @@ async function refreshAndDisplay(tab) {
       ? (await fetchStopsByIds(unknownIds)).map(parseStop).filter(Boolean)
       : [];
 
-    tab.view.update(buses, stops, extraStops, tab.direction, tab.route);
+    // Group predictions by vehicleId, sorted by stopSequence
+    const predictions = {};
+    for (const p of rawPredictions) {
+      (predictions[p.vehicleId] ??= []).push(p);
+    }
+    for (const arr of Object.values(predictions)) {
+      arr.sort((a, b) => (a.stopSequence ?? 0) - (b.stopSequence ?? 0));
+    }
+
+    tab.view.update(buses, stops, extraStops, tab.direction, tab.route, predictions);
     scheduleNextRefresh(tab);
 
   } catch (error) {

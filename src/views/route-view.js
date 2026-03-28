@@ -47,8 +47,8 @@ export function createRouteView() {
   box.append(contentBox);
   box.append(infoBox); // appended after contentBox so it renders on top
 
-  function update(buses, stops, extraStops, directionId, routeNumber = '87') {
-    lastUpdateArgs = [buses, stops, extraStops, directionId, routeNumber];
+  function update(buses, stops, extraStops, directionId, routeNumber = '87', predictions = {}) {
+    lastUpdateArgs = [buses, stops, extraStops, directionId, routeNumber, predictions];
     const screen = getScreen();
     const screenWidth = screen.width;
     const contentHeight = screen.height - 2; // minus tab bar and status bar
@@ -94,7 +94,7 @@ export function createRouteView() {
         top: 2, left: 0, width: '100%', height: 3,
         tags: true, content: '\n {yellow-fg}No active vehicles on this route.{/yellow-fg}',
       }));
-      updateInfoBox([], stops, extraStops, [], colorMap, infoBox);
+      updateInfoBox([], stops, extraStops, [], colorMap, infoBox, {});
       screen.render();
       return;
     }
@@ -130,7 +130,7 @@ export function createRouteView() {
       }));
     }
 
-    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox);
+    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions);
     screen.render();
   }
 
@@ -163,6 +163,33 @@ function occupancyBar(status) {
   if (!level) return '{grey-fg}[·····]{/grey-fg}';
   const filled = '█'.repeat(level.filled) + '·'.repeat(BAR_TOTAL - level.filled);
   return `{${level.color}-fg}[${filled}]{/${level.color}-fg}`;
+}
+
+// Format a prediction arrival/departure time as a relative ETA string.
+function fmtEta(isoTime) {
+  if (!isoTime) return null;
+  const diffMs = new Date(isoTime) - Date.now();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 0) return null; // already passed
+  if (diffMin === 0) return 'now';
+  return `${diffMin}m`;
+}
+
+// Find the next upcoming prediction for a vehicle and return a display string,
+// or null if none. Prefers arrival_time; falls back to departure_time.
+function nextEtaLine(vehiclePredictions, stopById, extraStopById) {
+  if (!vehiclePredictions?.length) return null;
+  const now = Date.now();
+  for (const p of vehiclePredictions) {
+    const time = p.arrivalTime ?? p.departureTime;
+    if (!time || new Date(time) < now) continue;
+    const eta = fmtEta(time);
+    if (!eta) continue;
+    const stop = stopById[p.stopId] ?? extraStopById[p.stopId];
+    if (!stop) continue; // skip predictions for stops we can't name
+    return `{grey-fg}next: {white-fg}${stop.name}{/white-fg} in {cyan-fg}${eta}{/cyan-fg}{/grey-fg}`;
+  }
+  return null;
 }
 
 function miniCarBar(carriage) {
@@ -205,7 +232,7 @@ function stopStatusLine(bus, stops, extraStopById, stopById, INNER) {
     : `{grey-fg}→ {white-fg}${to}{/white-fg}{/grey-fg}`;
 }
 
-function renderBusCard(bus, colorMap, stops, extraStopById, stopById, INNER) {
+function renderBusCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
   const color = colorMap.get(bus.id) || 'white';
   const char = busMarker(bus).char;
   const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
@@ -217,10 +244,11 @@ function renderBusCard(bus, colorMap, stops, extraStopById, stopById, INNER) {
   const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
   const line1 = padBetween(line1Left, line1Right, INNER);
   const line2 = stopStatusLine(bus, stops, extraStopById, stopById, INNER);
-  return [line1, line2];
+  const etaLine = nextEtaLine(vehiclePreds, stopById, extraStopById);
+  return etaLine ? [line1, line2, etaLine] : [line1, line2];
 }
 
-function renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, INNER) {
+function renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
   const color = colorMap.get(bus.id) || 'white';
   const char = busMarker(bus).char;
   const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
@@ -236,10 +264,11 @@ function renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, INNER) 
   const line2 = carBars || '{grey-fg}no car data{/grey-fg}';
 
   const line3 = stopStatusLine(bus, stops, extraStopById, stopById, INNER);
-  return [line1, line2, line3];
+  const etaLine = nextEtaLine(vehiclePreds, stopById, extraStopById);
+  return etaLine ? [line1, line2, line3, etaLine] : [line1, line2, line3];
 }
 
-function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox) {
+function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox, predictions) {
   if (buses.length === 0) {
     infoBox.height = 3;
     infoBox.setContent('{grey-fg}No vehicles{/grey-fg}');
@@ -255,9 +284,10 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox) {
   const divider = `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`;
 
   const cards = buses.flatMap(bus => {
+    const vehiclePreds = predictions[bus.id] ?? [];
     const cardLines = bus.carriages.length > 0
-      ? renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, INNER)
-      : renderBusCard(bus, colorMap, stops, extraStopById, stopById, INNER);
+      ? renderSubwayCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER)
+      : renderBusCard(bus, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER);
     return [...cardLines, divider];
   });
 

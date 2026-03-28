@@ -46,6 +46,31 @@ export async function fetchRouteVehicles(routeNumber, directionId = null) {
 }
 
 /**
+ * Fetch live predictions for a route/direction.
+ * @param {string} routeNumber
+ * @param {number} directionId
+ * @returns {Promise<Array>} - Array of { vehicleId, stopId, arrivalTime, departureTime, stopSequence }
+ */
+export async function fetchRoutePredictions(routeNumber, directionId) {
+  const params = {
+    'filter[route]': routeNumber,
+    'filter[direction_id]': directionId.toString(),
+  };
+  const data = await fetchFromApi('/predictions', params);
+  return (data.data || []).flatMap(p => {
+    const vehicleId = p.relationships?.vehicle?.data?.id ?? null;
+    if (!vehicleId) return [];
+    return [{
+      vehicleId,
+      stopId: p.relationships?.stop?.data?.id ?? null,
+      arrivalTime: p.attributes?.arrival_time ?? null,
+      departureTime: p.attributes?.departure_time ?? null,
+      stopSequence: p.attributes?.stop_sequence ?? null,
+    }];
+  });
+}
+
+/**
  * Fetch routes by MBTA route type filter string (e.g. '3' or '0,1')
  * @param {string} typeFilter
  * @returns {Promise<Array>} - Array of {id, name} objects sorted by id
