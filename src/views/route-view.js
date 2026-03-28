@@ -1,6 +1,6 @@
 import blessed from 'blessed';
 import { getScreen } from '../screen.js';
-import { placeBuses, busMarker, busColor, formatOccupancy } from '../utils.js';
+import { placeBuses, busMarker, busColor, formatOccupancy, calculateDistance } from '../utils.js';
 
 /**
  * Create a route visualization view.
@@ -149,6 +149,19 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
   const stopById = {};
   stops.forEach(s => { stopById[s.id] = s; });
 
+  // Vehicles report child stop IDs (specific platforms/berths) that don't
+  // appear in the route stop list. Fall back to nearest stop by lat/lon.
+  const nearestStop = (bus) => {
+    if (!bus.latitude || !bus.longitude) return null;
+    let best = null, bestDist = Infinity;
+    stops.forEach(s => {
+      if (!s.latitude || !s.longitude) return;
+      const d = calculateDistance(bus.latitude, bus.longitude, s.latitude, s.longitude);
+      if (d < bestDist) { bestDist = d; best = s; }
+    });
+    return best;
+  };
+
   const INNER = 66; // infoBox width (68) minus 2 for border
 
   const cards = buses.flatMap(bus => {
@@ -165,7 +178,7 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
     const line1 = padBetween(line1Left, line1Right, INNER);
 
     // Line 2: status + stop name(s)
-    const toStop = stopById[bus.currentStopId];
+    const toStop = stopById[bus.currentStopId] ?? nearestStop(bus);
     const toName = toStop?.name ?? '';
     let line2;
     if (bus.currentStatus === 'STOPPED_AT') {
