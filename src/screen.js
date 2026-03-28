@@ -46,7 +46,7 @@ export function initScreen() {
     content: ' [r] route  [n] new tab  [?] help  [q] quit',
   });
 
-  tabBar.on('click', (data) => {
+  tabBar.on('mousedown', (data) => {
     let pos = 0;
     for (let i = 0; i < tabs.length; i++) {
       const tabWidth = tabs[i].label.length + 2; // " label "
