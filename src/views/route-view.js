@@ -43,10 +43,17 @@ export function createRouteView() {
     tags: true,
     border: { type: 'line' },
     label: ' Vehicles ',
+    scrollable: true,
+    alwaysScroll: true,
     style: { border: { fg: 'grey', bg: 'black' }, bg: 'black' },
   });
   box.append(leftPane);
   box.append(rightPane);
+
+  leftPane.on('wheelup',    () => scroll(-3));
+  leftPane.on('wheeldown',  () => scroll(3));
+  rightPane.on('wheelup',   () => { rightPane.scroll(-3); getScreen().render(); });
+  rightPane.on('wheeldown', () => { rightPane.scroll(3);  getScreen().render(); });
 
   // Re-render on terminal resize using the last known data
   getScreen().on('resize', () => { if (lastUpdateArgs) update(...lastUpdateArgs); });

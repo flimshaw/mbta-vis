@@ -24,6 +24,7 @@ export function initScreen() {
     title: 'MBTA Visualizer',
     fullUnicode: true,
     forceUnicode: true,
+    mouse: true,
   });
 
   tabBar = blessed.box({
