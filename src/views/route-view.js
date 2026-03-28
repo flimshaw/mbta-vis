@@ -159,8 +159,8 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
     const speedKmh = bus.speed != null ? Math.round(bus.speed) : 0;
     const speedStr = `${speedKmh} km/h`;
 
-    // Line 1: marker + label + revenue + speed
-    const line1Left = `{${color}-fg}${char} Bus ${label}{/${color}-fg} ${revenue}`;
+    // Line 1: marker + label + revenue + occupancy bar + speed
+    const line1Left = `{${color}-fg}${char} Bus ${label}{/${color}-fg} ${revenue} ${occupancyBar(bus.occupancyStatus)}`;
     const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
     const line1 = padBetween(line1Left, line1Right, INNER);
 
@@ -173,10 +173,7 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
     const stopName = (stopById[bus.currentStopId]?.name ?? '').slice(0, INNER - 4);
     const line2 = `{grey-fg}${statusShort} {white-fg}${stopName}{/white-fg}{/grey-fg}`;
 
-    // Line 3: occupancy bar
-    const line3 = occupancyBar(bus.occupancyStatus);
-
-    return [line1, line2, line3, `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`];
+    return [line1, line2, `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`];
   });
 
   // Remove trailing divider
