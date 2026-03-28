@@ -157,7 +157,7 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
     const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
     const label = (bus.label || bus.id).slice(0, 6);
     const speedKmh = bus.speed != null ? Math.round(bus.speed) : 0;
-    const speedStr = `${speedKmh} km/h`;
+    const speedStr = `${speedKmh}km/h`;
 
     // Line 1: marker + label + revenue + occupancy bar + speed
     const line1Left = `{${color}-fg}${char} Bus ${label}{/${color}-fg} ${revenue} ${occupancyBar(bus.occupancyStatus)}`;
@@ -184,9 +184,9 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
 }
 
 // Lay out left and right text in a fixed-width field.
-// Tag characters don't count toward visible width so we measure raw visible chars.
+// Strips blessed tags ({anything}) before measuring visible character width.
 function padBetween(left, right, totalWidth) {
-  const visibleLen = s => s.replace(/\{[^}]+\}/g, '').length;
+  const visibleLen = s => s.replace(/\{\/?\w[\w-]*\}/g, '').length;
   const gap = Math.max(1, totalWidth - visibleLen(left) - visibleLen(right));
   return left + ' '.repeat(gap) + right;
 }
