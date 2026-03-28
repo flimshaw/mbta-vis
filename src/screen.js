@@ -71,11 +71,6 @@ export function getScreen() {
  * @returns {number} Index of the new tab
  */
 export function addTab(label, view) {
-  view.box.position.top = 1;
-  view.box.position.left = 0;
-  view.box.width = '100%';
-  view.box.height = screen.height - 2;
-
   if (tabs.length > 0) view.box.hide();
 
   screen.append(view.box);
@@ -99,6 +94,14 @@ export function setActiveTab(index) {
 
 export function getActiveTabIndex() {
   return activeTabIndex;
+}
+
+export function updateTabLabel(index, label) {
+  if (index >= 0 && index < tabs.length) {
+    tabs[index].label = label;
+    renderTabBar();
+    screen.render();
+  }
 }
 
 function renderTabBar() {

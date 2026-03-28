@@ -1,5 +1,5 @@
 import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, parseVehicle, parseStop } from './mbta-api.js';
-import { initScreen, addTab, setStatus, setRouteList, onRouteSelect, onDirectionToggle } from './screen.js';
+import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
 const AUTO_REFRESH_MS = 10000;
@@ -11,24 +11,39 @@ const RETRY_DELAY_MS = 5000;
 let currentRoute = DEFAULT_ROUTE;
 let currentDirection = DEFAULT_DIRECTION;
 let activeView = null;
+let activeTabIndex = 0;
 let refreshTimer = null;
 let countdownTimer = null;
+
+// Stop cache — avoids re-fetching stops on every vehicle refresh
+let cachedStops = [];
+let cachedStopsKey = ''; // "route:direction"
+
+async function getStops(route, direction) {
+  const key = `${route}:${direction}`;
+  if (key !== cachedStopsKey) {
+    const raw = await fetchRouteStops(route, direction);
+    cachedStops = raw.map(parseStop).filter(Boolean);
+    cachedStopsKey = key;
+  }
+  return cachedStops;
+}
 
 async function refreshAndDisplay() {
   setStatus(`{yellow-fg}Fetching Route ${currentRoute}...{/yellow-fg}`);
 
   try {
+    // Fetch vehicles and stops (stops may be cached)
     const [vehicles, stops] = await fetchWithRetry(() =>
       Promise.all([
         fetchRouteVehicles(currentRoute, currentDirection),
-        fetchRouteStops(currentRoute, currentDirection),
+        getStops(currentRoute, currentDirection),
       ])
     );
 
     const buses = vehicles.map(parseVehicle).filter(Boolean);
-    const parsedStops = stops.map(parseStop).filter(Boolean);
 
-    activeView.update(buses, parsedStops, currentDirection, currentRoute);
+    activeView.update(buses, stops, currentDirection, currentRoute);
     scheduleNextRefresh();
 
   } catch (error) {
@@ -64,6 +79,7 @@ function scheduleNextRefresh() {
 
 function switchRoute(routeId) {
   currentRoute = routeId;
+  updateTabLabel(activeTabIndex, `Route ${routeId}`);
   clearTimeout(refreshTimer);
   clearInterval(countdownTimer);
   refreshAndDisplay();
@@ -103,7 +119,7 @@ export async function main() {
   onDirectionToggle(toggleDirection);
 
   activeView = createRouteView();
-  addTab(`Route ${currentRoute}`, activeView);
+  activeTabIndex = addTab(`Route ${currentRoute}`, activeView);
 
   fetchBusRoutes().then(setRouteList).catch(() => {});
 

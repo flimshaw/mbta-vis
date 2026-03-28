@@ -62,22 +62,21 @@ export async function fetchBusRoutes() {
 
 /**
  * Fetch stops for a route in sequence order via a representative trip.
- * Using stop_times ensures stops are ordered correctly for the direction.
  * @param {string} routeNumber - Route number (e.g., '87', '57', '92')
  * @param {number} directionId - 0 or 1
  * @returns {Promise<Array>} - Array of stop data in route order
  */
 export async function fetchRouteStops(routeNumber, directionId = 0) {
-  // Get a representative trip for this route+direction
+  // 1. Get a representative trip for this route+direction
   const tripData = await fetchFromApi('/trips', {
     'filter[route]': routeNumber,
     'filter[direction_id]': directionId.toString(),
     'page[limit]': '1',
+    'fields[trip]': 'id',
   });
 
   const trip = tripData.data?.[0];
   if (!trip) {
-    // Fallback to unordered stops if no trip found
     const data = await fetchFromApi('/stops', {
       'filter[route]': routeNumber,
       'filter[direction_id]': directionId.toString(),
@@ -85,20 +84,34 @@ export async function fetchRouteStops(routeNumber, directionId = 0) {
     return data.data || [];
   }
 
-  // Fetch stop times for that trip, which come back in stop_sequence order
+  // 2. Get stop IDs in sequence order (sparse fieldset keeps response small)
   const stData = await fetchFromApi('/stop_times', {
     'filter[trip]': trip.id,
-    'include': 'stop',
     'sort': 'stop_sequence',
+    'fields[stop_time]': 'stop_sequence',
   });
 
-  // The included stops come back in the `included` array; order by stop_times
-  const stopById = {};
-  (stData.included || []).forEach(s => { stopById[s.id] = s; });
-
-  return (stData.data || [])
-    .map(st => stopById[st.relationships?.stop?.data?.id])
+  const orderedIds = (stData.data || [])
+    .map(st => st.relationships?.stop?.data?.id)
     .filter(Boolean);
+
+  if (orderedIds.length === 0) {
+    const data = await fetchFromApi('/stops', {
+      'filter[route]': routeNumber,
+      'filter[direction_id]': directionId.toString(),
+    });
+    return data.data || [];
+  }
+
+  // 3. Fetch stop details for those IDs
+  const stopsData = await fetchFromApi('/stops', {
+    'filter[id]': orderedIds.join(','),
+  });
+
+  const stopById = {};
+  (stopsData.data || []).forEach(s => { stopById[s.id] = s; });
+
+  return orderedIds.map(id => stopById[id]).filter(Boolean);
 }
 
 /**

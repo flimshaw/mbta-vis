@@ -7,39 +7,52 @@ import { placeBuses, busMarker, busColor, formatOccupancy } from '../utils.js';
  * @returns {{ box: BlessedBox, update: function }}
  */
 export function createRouteView() {
-  const box = blessed.box({ tags: true });
+  // Box dimensions are set by addTab; use percentage fallbacks
+  const box = blessed.box({
+    top: 1,
+    left: 0,
+    width: '100%',
+    height: '100%-2',
+    tags: true,
+  });
 
   // Persistent color assignments so bus colors stay stable across refreshes
   const colorMap = new Map();
 
-  // Info overlay — created once, lives in the lower-right corner
+  // Info overlay — lives outside the destroy loop so it's never recreated
   const infoBox = blessed.box({
     bottom: 0,
     right: 0,
     width: 36,
-    height: 6, // resized dynamically on each update
+    height: 4,
     tags: true,
     border: { type: 'line' },
     label: ' Buses ',
     style: { border: { fg: 'grey' }, bg: 'black' },
-    content: '',
   });
+  box.append(infoBox);
+
+  // Content area — all route rendering goes here; this is what gets cleared
+  const contentBox = blessed.box({
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    tags: true,
+  });
+  box.append(contentBox);
 
   function update(buses, stops, directionId, routeNumber = '87') {
     const screen = getScreen();
     const screenWidth = screen.width;
-    const boxHeight = box.height || (screen.height - 2);
+    const contentHeight = screen.height - 2; // minus tab bar and status bar
+
+    buses.forEach(b => busColor(b.id, colorMap));
 
     const placed = placeBuses(buses, stops);
     const placedIds = new Set(placed.map(p => p.bus.id));
-
-    // Buses that couldn't be placed on any segment
     const unplaced = buses.filter(b => !placedIds.has(b.id));
 
-    // Ensure all bus IDs have a color assigned (including unplaced)
-    buses.forEach(b => busColor(b.id, colorMap));
-
-    // Group placements by segment index
     const segmentBuses = {};
     placed.forEach(p => {
       (segmentBuses[p.segmentIndex] ??= []).push(p);
@@ -52,18 +65,20 @@ export function createRouteView() {
     const dir = directionId === 0 ? 'Outbound' : 'Inbound';
     const header = `{bold}{cyan-fg}MBTA Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} bus(es) active{/grey-fg}`;
 
-    box.children.slice().forEach(c => c.destroy());
+    // Clear only the content area, not infoBox
+    contentBox.children.slice().forEach(c => c.destroy());
 
-    box.append(blessed.box({
+    contentBox.append(blessed.box({
       top: 0, left: 0, width: '100%', height: 2,
       tags: true, content: '\n ' + header,
     }));
 
     if (buses.length === 0) {
-      box.append(blessed.box({
+      contentBox.append(blessed.box({
         top: 2, left: 0, width: '100%', height: 3,
         tags: true, content: '\n {yellow-fg}No active buses on this route.{/yellow-fg}',
       }));
+      updateInfoBox([], [], colorMap, infoBox);
       screen.render();
       return;
     }
@@ -85,11 +100,11 @@ export function createRouteView() {
       const innerWidth = numCols > 1 ? boxWidth - 2 : boxWidth;
       const hasMoreStops = endIdx < stops.length;
 
-      box.append(blessed.box({
+      contentBox.append(blessed.box({
         top: 2,
         left: col * colWidth,
         width: boxWidth,
-        height: boxHeight - 2,
+        height: contentHeight - 2,
         tags: true,
         scrollable: true,
         keys: true,
@@ -99,10 +114,7 @@ export function createRouteView() {
       }));
     }
 
-    // Update info overlay
     updateInfoBox(buses, unplaced, colorMap, infoBox);
-    box.append(infoBox);
-
     screen.render();
   }
 
@@ -110,16 +122,22 @@ export function createRouteView() {
 }
 
 function updateInfoBox(buses, unplaced, colorMap, infoBox) {
+  if (buses.length === 0) {
+    infoBox.height = 3;
+    infoBox.setContent('{grey-fg}No buses{/grey-fg}');
+    return;
+  }
+
   const lines = buses.map(bus => {
     const color = colorMap.get(bus.id) || 'white';
-    const marker = busMarker(bus).char;
-    const label = `Bus ${bus.label || bus.id}`.padEnd(10).slice(0, 10);
+    const char = busMarker(bus).char;
+    const label = `Bus ${bus.label || bus.id}`.slice(0, 10).padEnd(10);
     const occ = formatOccupancy(bus.occupancyStatus);
     const flag = unplaced.some(u => u.id === bus.id) ? ' {grey-fg}?{/grey-fg}' : '';
-    return `{${color}-fg}${marker} ${label}{/${color}-fg} {grey-fg}${occ}{/grey-fg}${flag}`;
+    return `{${color}-fg}${char} ${label}{/${color}-fg} {grey-fg}${occ}{/grey-fg}${flag}`;
   });
 
-  infoBox.height = Math.min(buses.length + 2, 12);
+  infoBox.height = buses.length + 2;
   infoBox.setContent(lines.join('\n'));
 }
 
@@ -151,8 +169,7 @@ function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, col
     if (atStop.length > 0) {
       const p = atStop[0];
       const color = colorMap.get(p.bus.id) || 'white';
-      const char = busMarker(p.bus).char;
-      marker = `{${color}-fg}${char}{/${color}-fg}`;
+      marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
     }
 
     const nameTag = hasActivity
@@ -167,8 +184,7 @@ function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, col
       inTransit.forEach(p => {
         const pos = Math.max(1, Math.min(trackWidth - 2, Math.floor(p.proportion * (trackWidth - 2)) + 1));
         const color = colorMap.get(p.bus.id) || 'white';
-        const char = busMarker(p.bus).char;
-        track[pos] = { color, char };
+        track[pos] = { color, char: busMarker(p.bus).char };
       });
 
       trackPart = ' ' + track.map(ch =>
