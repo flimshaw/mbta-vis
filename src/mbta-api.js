@@ -1,7 +1,7 @@
 import 'dotenv/config';
 
-const API_KEY = process.env.MBTA_API_KEY;
-if (!API_KEY) throw new Error('MBTA_API_KEY is not set. Copy .env.example to .env and add your key.');
+const API_KEY = process.env.MBTA_API_KEY || null;
+if (!API_KEY) console.warn('Warning: MBTA_API_KEY not set. Running unauthenticated (rate limit: 20 req/min). See .env.example.');
 const BASE_URL = 'https://api-v3.mbta.com';
 
 /**
@@ -15,11 +15,9 @@ export async function fetchFromApi(endpoint, params = {}) {
   const queryString = searchParams.toString();
   const url = queryString ? `${BASE_URL}${endpoint}?${queryString}` : `${BASE_URL}${endpoint}`;
   
-  const response = await fetch(url, {
-    headers: {
-      'x-api-key': API_KEY,
-      'Accept': 'application/json'
-    }
+  const headers = { 'Accept': 'application/json' };
+  if (API_KEY) headers['x-api-key'] = API_KEY;
+  const response = await fetch(url, { headers
   });
 
   if (!response.ok) {

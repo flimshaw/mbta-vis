@@ -15,13 +15,12 @@ cd mbta-vis
 npm install
 ```
 
-3. Get a free API key from [api.mbta.com](https://api.mbta.com) (sign up, then create a key under your account)
+No API key is required — the MBTA API is public and works unauthenticated. If you're running multiple tabs or refreshing frequently, you may hit the anonymous rate limit (20 req/min). To get a higher limit, grab a free key from [api.mbta.com](https://api.mbta.com) and add it:
 
-4. Copy the example env file and add your key:
-   ```bash
-   cp .env.example .env
-   # edit .env and replace 'your_api_key_here' with your actual key
-   ```
+```bash
+cp .env.example .env
+# edit .env and set MBTA_API_KEY=your_key_here
+```
 
 ## Usage
 

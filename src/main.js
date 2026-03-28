@@ -2,7 +2,7 @@ import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchSubwayRoutes,
 import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, onScroll, openRouteSelector, setActiveTab } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
-const AUTO_REFRESH_MS = 2000;
+const AUTO_REFRESH_MS = 10000;
 const DEFAULT_ROUTE = '87';
 const DEFAULT_DIRECTION = 0;
 const MAX_RETRIES = 3;
