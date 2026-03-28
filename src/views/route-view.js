@@ -23,15 +23,13 @@ export function createRouteView() {
   const infoBox = blessed.box({
     bottom: 0,
     right: 0,
-    width: 36,
+    width: 24,
     height: 4,
     tags: true,
     border: { type: 'line' },
     label: ' Buses ',
     style: { border: { fg: 'grey' }, bg: 'black' },
   });
-  box.append(infoBox);
-
   // Content area — all route rendering goes here; this is what gets cleared
   const contentBox = blessed.box({
     top: 0,
@@ -41,6 +39,7 @@ export function createRouteView() {
     tags: true,
   });
   box.append(contentBox);
+  box.append(infoBox); // appended after contentBox so it renders on top
 
   function update(buses, stops, directionId, routeNumber = '87') {
     const screen = getScreen();
@@ -121,6 +120,25 @@ export function createRouteView() {
   return { box, update };
 }
 
+// Occupancy levels in increasing order, used to build the fill bar
+const OCCUPANCY_LEVELS = [
+  { status: 'EMPTY',                      filled: 0, color: 'green'   },
+  { status: 'MANY_SEATS_AVAILABLE',       filled: 1, color: 'green'   },
+  { status: 'FEW_SEATS_AVAILABLE',        filled: 2, color: 'yellow'  },
+  { status: 'STANDING_ROOM_ONLY',         filled: 3, color: 'yellow'  },
+  { status: 'CRUSHED_STANDING_ROOM_ONLY', filled: 4, color: 'red'     },
+  { status: 'FULL',                       filled: 5, color: 'red'     },
+  { status: 'NOT_ACCEPTING_PASSENGERS',   filled: 5, color: 'red'     },
+];
+const BAR_TOTAL = 5;
+
+function occupancyBar(status) {
+  const level = OCCUPANCY_LEVELS.find(l => l.status === status);
+  if (!level) return '{grey-fg}[·····]{/grey-fg}';
+  const filled = '█'.repeat(level.filled) + '·'.repeat(BAR_TOTAL - level.filled);
+  return `{${level.color}-fg}[${filled}]{/${level.color}-fg}`;
+}
+
 function updateInfoBox(buses, unplaced, colorMap, infoBox) {
   if (buses.length === 0) {
     infoBox.height = 3;
@@ -131,10 +149,10 @@ function updateInfoBox(buses, unplaced, colorMap, infoBox) {
   const lines = buses.map(bus => {
     const color = colorMap.get(bus.id) || 'white';
     const char = busMarker(bus).char;
-    const label = `Bus ${bus.label || bus.id}`.slice(0, 10).padEnd(10);
-    const occ = formatOccupancy(bus.occupancyStatus);
-    const flag = unplaced.some(u => u.id === bus.id) ? ' {grey-fg}?{/grey-fg}' : '';
-    return `{${color}-fg}${char} ${label}{/${color}-fg} {grey-fg}${occ}{/grey-fg}${flag}`;
+    const label = (bus.label || bus.id).slice(0, 6).padEnd(6);
+    const bar = occupancyBar(bus.occupancyStatus);
+    const flag = unplaced.some(u => u.id === bus.id) ? '{grey-fg}?{/grey-fg}' : ' ';
+    return `{${color}-fg}${char} ${label}{/${color}-fg} ${bar} ${flag}`;
   });
 
   infoBox.height = buses.length + 2;
