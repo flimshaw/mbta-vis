@@ -1,6 +1,6 @@
 import blessed from 'blessed';
 import { getScreen } from '../screen.js';
-import { placeBuses, busMarker, busColor, formatOccupancy, calculateDistance } from '../utils.js';
+import { placeBuses, busMarker, busColor, formatOccupancy } from '../utils.js';
 
 /**
  * Create a route visualization view.
@@ -41,7 +41,7 @@ export function createRouteView() {
   box.append(contentBox);
   box.append(infoBox); // appended after contentBox so it renders on top
 
-  function update(buses, stops, directionId, routeNumber = '87') {
+  function update(buses, stops, extraStops, directionId, routeNumber = '87') {
     const screen = getScreen();
     const screenWidth = screen.width;
     const contentHeight = screen.height - 2; // minus tab bar and status bar
@@ -77,7 +77,7 @@ export function createRouteView() {
         top: 2, left: 0, width: '100%', height: 3,
         tags: true, content: '\n {yellow-fg}No active buses on this route.{/yellow-fg}',
       }));
-      updateInfoBox([], stops, [], colorMap, infoBox);
+      updateInfoBox([], stops, extraStops, [], colorMap, infoBox);
       screen.render();
       return;
     }
@@ -113,7 +113,7 @@ export function createRouteView() {
       }));
     }
 
-    updateInfoBox(buses, stops, unplaced, colorMap, infoBox);
+    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox);
     screen.render();
   }
 
@@ -139,28 +139,18 @@ function occupancyBar(status) {
   return `{${level.color}-fg}[${filled}]{/${level.color}-fg}`;
 }
 
-function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
+function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, infoBox) {
   if (buses.length === 0) {
     infoBox.height = 3;
     infoBox.setContent('{grey-fg}No buses{/grey-fg}');
     return;
   }
 
+  // Route stops for segment placement; extraStops for vehicle berth/platform names
   const stopById = {};
   stops.forEach(s => { stopById[s.id] = s; });
-
-  // Vehicles report child stop IDs (specific platforms/berths) that don't
-  // appear in the route stop list. Fall back to nearest stop by lat/lon.
-  const nearestStop = (bus) => {
-    if (!bus.latitude || !bus.longitude) return null;
-    let best = null, bestDist = Infinity;
-    stops.forEach(s => {
-      if (!s.latitude || !s.longitude) return;
-      const d = calculateDistance(bus.latitude, bus.longitude, s.latitude, s.longitude);
-      if (d < bestDist) { bestDist = d; best = s; }
-    });
-    return best;
-  };
+  const extraStopById = {};
+  extraStops.forEach(s => { extraStopById[s.id] = s; });
 
   const INNER = 66; // infoBox width (68) minus 2 for border
 
@@ -178,18 +168,24 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
     const line1 = padBetween(line1Left, line1Right, INNER);
 
     // Line 2: status + stop name(s)
-    const toStop = stopById[bus.currentStopId] ?? nearestStop(bus);
-    const toName = toStop?.name ?? '';
+    // Prefer the exact vehicle stop (berth/platform) for name; fall back to route stop
+    const vehicleStop = extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId];
+    const toName = vehicleStop?.name ?? '';
+    // For berths, also show the platform detail if available
+    const berthDetail = extraStopById[bus.currentStopId]?.platformName ?? null;
+    const toDisplay = berthDetail ? `${toName} (${berthDetail})` : toName;
+
     let line2;
     if (bus.currentStatus === 'STOPPED_AT') {
-      line2 = `{grey-fg}at {white-fg}${toName}{/white-fg}{/grey-fg}`;
+      line2 = `{grey-fg}at {white-fg}${toDisplay}{/white-fg}{/grey-fg}`;
     } else {
+      // For in-transit, find the destination in the route stops list for from/to
       const toIdx = stops.findIndex(s => s.id === bus.currentStopId);
       const fromStop = toIdx > 0 ? stops[toIdx - 1] : null;
       const fromName = fromStop?.name ?? '';
       const maxHalf = Math.floor((INNER - 5) / 2); // 5 for " → " + padding
       const from = fromName.slice(0, maxHalf);
-      const to = toName.slice(0, maxHalf);
+      const to = toDisplay.slice(0, maxHalf);
       line2 = fromName
         ? `{grey-fg}{white-fg}${from}{/white-fg} → {white-fg}${to}{/white-fg}{/grey-fg}`
         : `{grey-fg}→ {white-fg}${to}{/white-fg}{/grey-fg}`;

@@ -75,6 +75,17 @@ export async function fetchRouteStops(routeNumber, directionId = 0) {
 }
 
 /**
+ * Fetch a set of stops by ID (used to resolve vehicle child stop IDs)
+ * @param {string[]} ids
+ * @returns {Promise<Array>} - Array of raw stop data
+ */
+export async function fetchStopsByIds(ids) {
+  if (ids.length === 0) return [];
+  const data = await fetchFromApi('/stops', { 'filter[id]': ids.join(',') });
+  return data.data || [];
+}
+
+/**
  * Parse vehicle data into normalized format
  * @param {object} vehicle - Raw vehicle data from API
  * @returns {object|null} - Normalized vehicle data or null if invalid
@@ -120,8 +131,8 @@ export function parseStop(stop) {
   return {
     id: stop.id,
     name: attrs.name || `Stop ${stop.id}`,
+    platformName: attrs.platform_name || null,
     latitude: attrs.latitude,
     longitude: attrs.longitude,
-    stopId: attrs.stop_id
   };
 }

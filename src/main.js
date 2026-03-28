@@ -1,4 +1,4 @@
-import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, parseVehicle, parseStop } from './mbta-api.js';
+import { fetchRouteVehicles, fetchRouteStops, fetchBusRoutes, fetchStopsByIds, parseVehicle, parseStop } from './mbta-api.js';
 import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 
@@ -43,7 +43,16 @@ async function refreshAndDisplay() {
 
     const buses = vehicles.map(parseVehicle).filter(Boolean);
 
-    activeView.update(buses, stops, currentDirection, currentRoute);
+    // Fetch any vehicle stop IDs not already in the route stop list
+    const routeStopIds = new Set(stops.map(s => s.id));
+    const unknownIds = [...new Set(
+      buses.map(b => b.currentStopId).filter(id => id && !routeStopIds.has(id))
+    )];
+    const extraStops = unknownIds.length > 0
+      ? (await fetchStopsByIds(unknownIds)).map(parseStop).filter(Boolean)
+      : [];
+
+    activeView.update(buses, stops, extraStops, currentDirection, currentRoute);
     scheduleNextRefresh();
 
   } catch (error) {
