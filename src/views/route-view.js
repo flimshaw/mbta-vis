@@ -23,7 +23,7 @@ export function createRouteView() {
   const infoBox = blessed.box({
     bottom: 0,
     right: 0,
-    width: 34,
+    width: 68,
     height: 4,
     tags: true,
     border: { type: 'line' },
@@ -149,7 +149,7 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
   const stopById = {};
   stops.forEach(s => { stopById[s.id] = s; });
 
-  const INNER = 32; // infoBox width (34) minus 2 for border
+  const INNER = 66; // infoBox width (68) minus 2 for border
 
   const cards = buses.flatMap(bus => {
     const color = colorMap.get(bus.id) || 'white';
@@ -176,7 +176,7 @@ function updateInfoBox(buses, stops, unplaced, colorMap, infoBox) {
     // Line 3: occupancy bar
     const line3 = occupancyBar(bus.occupancyStatus);
 
-    return [line1, line2, line3, '{grey-fg}─'.repeat(INNER) + '{/grey-fg}'];
+    return [line1, line2, line3, `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`];
   });
 
   // Remove trailing divider
