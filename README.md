@@ -2,7 +2,7 @@
 
 A real-time terminal UI for tracking MBTA buses and subway trains, showing live vehicle positions, occupancy, and arrival predictions. Uses `blessed` for that authentic ncurses mouthfeel.
 
-![screenshot](./screenshot.png)
+![screenshot](./screenshot.jpg)
 
 ## Requirements
 
