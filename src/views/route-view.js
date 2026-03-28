@@ -219,6 +219,15 @@ function statusLines(bus, placement, stops, stopById, extraStopById, vehiclePred
   return [line];
 }
 
+function vehicleStatusLabel(status) {
+  switch (status) {
+    case 'STOPPED_AT':    return '{yellow-fg}stopped{/yellow-fg}';
+    case 'INCOMING_AT':   return '{cyan-fg}arriving{/cyan-fg}';
+    case 'IN_TRANSIT_TO': return '{green-fg}moving{/green-fg}';
+    default:              return null;
+  }
+}
+
 function miniCarBar(carriage) {
   if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
     return '{red-fg}[×××××]{/red-fg}';
@@ -245,11 +254,12 @@ function renderBusCard(bus, placement, colorMap, stops, extraStopById, stopById,
   const char = busMarker(bus).char;
   const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
   const label = (bus.label || bus.id).slice(0, 6);
-  const speedStr = `${bus.speed != null ? Math.round(bus.speed) : 0}km/h`;
+  const speedStr = bus.speed != null ? `{grey-fg}${Math.round(bus.speed * 2.23694)}mph{/grey-fg}` : null;
 
   const occupancyText = bus.occupancyStatus ? `{grey-fg}${formatOccupancy(bus.occupancyStatus)}{/grey-fg}` : '';
   const line1Left = `{${color}-fg}${char} #${label}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`;
-  const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
+  const statusLabel = vehicleStatusLabel(bus.currentStatus);
+  const line1Right = [statusLabel, speedStr].filter(Boolean).join(' ');
   const line1 = padBetween(line1Left, line1Right, INNER);
   return [line1, ...statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER)];
 }
@@ -259,11 +269,12 @@ function renderSubwayCard(bus, placement, colorMap, stops, extraStopById, stopBy
   const char = busMarker(bus).char;
   const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
   const label = (bus.label || bus.id).slice(0, 10);
-  const speedStr = `${bus.speed != null ? Math.round(bus.speed) : 0}km/h`;
+  const speedStr = bus.speed != null ? `{grey-fg}${Math.round(bus.speed * 2.23694)}mph{/grey-fg}` : null;
 
   const occupancyText = bus.occupancyStatus ? `{grey-fg}${formatOccupancy(bus.occupancyStatus)}{/grey-fg}` : '';
   const line1Left = `{${color}-fg}${char} #${label}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`;
-  const line1Right = `{grey-fg}${speedStr}{/grey-fg}`;
+  const statusLabel = vehicleStatusLabel(bus.currentStatus);
+  const line1Right = [statusLabel, speedStr].filter(Boolean).join(' ');
   const line1 = padBetween(line1Left, line1Right, INNER);
 
   const carBars = bus.carriages.map((c, i) => `{grey-fg}${i + 1}{/grey-fg}${miniCarBar(c)}`).join(' ');

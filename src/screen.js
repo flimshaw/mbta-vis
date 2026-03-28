@@ -42,7 +42,7 @@ export function initScreen() {
     height: 1,
     tags: true,
     style: { bg: 'blue', fg: 'white' },
-    content: ' [r] route  [?] help  [q] quit',
+    content: ' [r] route  [n] new tab  [?] help  [q] quit',
   });
 
   screen.append(tabBar);
@@ -127,7 +127,7 @@ function renderTabBar() {
  */
 export function setStatus(text) {
   if (statusBar) {
-    statusBar.setContent(` ${text}  {|}  [r] route  [?] help  [q] quit`);
+    statusBar.setContent(` ${text}  {|}  [r] route  [n] new tab  [?] help  [q] quit`);
     screen.render();
   }
 }
