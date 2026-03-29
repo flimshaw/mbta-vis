@@ -1,17 +1,31 @@
 {
-  "name": "mbta-visualizer",
+  "name": "mbta-vis",
   "version": "1.0.0",
-  "description": "CLI tool that fetches real-time bus data for MBTA Route 87 and displays ASCII visualization",
+  "description": "Real-time terminal UI for tracking MBTA buses and subway trains",
   "type": "module",
   "main": "src/main.js",
+  "bin": {
+    "mbta-vis": "./bin/mbta-vis.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    ".env.example"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
-    "start": "node src/main.js 87 1",
+    "start": "node bin/mbta-vis.js",
     "test": "node --test src/**/*.test.js",
     "lint": "eslint src/"
   },
   "keywords": [
     "mbta",
-    "route-87",
+    "transit",
+    "terminal",
+    "tui",
     "visualizer",
     "cli"
   ],
