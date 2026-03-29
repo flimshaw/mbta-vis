@@ -12,9 +12,10 @@ import { groupPredictions, resolveUnknownStopIds, cacheKey } from './domain/rout
  * @param {function} deps.setStatus        - screen.setStatus(text)
  * @param {function} deps.setActiveTab     - screen.setActiveTab(tabIndex)
  * @param {function} deps.openRouteSelector - screen.openRouteSelector()
+ * @param {function} deps.getRouteName     - screen.getRouteName(routeId) → routeName or null
  * @returns {{ create, handleRouteSelect, requestNewTab, toggleDirection, switchTab, scrollActive }}
  */
-export function createTabManager({ createView, addTab, updateTabLabel, setStatus, setActiveTab, openRouteSelector }) {
+export function createTabManager({ createView, addTab, updateTabLabel, setStatus, setActiveTab, openRouteSelector, getRouteName }) {
   // Per-tab state: [{ tabIndex, route, direction, view, refreshTimer, countdownTimer, cachedStops, cachedStopsKey, lastStatus }]
   const tabStates = [];
   let activeTabIdx = 0;
@@ -22,6 +23,15 @@ export function createTabManager({ createView, addTab, updateTabLabel, setStatus
 
   function activeTab() {
     return tabStates[activeTabIdx];
+  }
+
+  /** Format tab label: use route name if available (subway), otherwise show "Route X" (bus). */
+  function formatTabLabel(routeId) {
+    const routeName = getRouteName(routeId);
+    if (routeName) {
+      return routeName;
+    }
+    return `Route ${routeId}`;
   }
 
   async function getStops(tab, route, direction) {
@@ -102,7 +112,7 @@ export function createTabManager({ createView, addTab, updateTabLabel, setStatus
     /** Create a new tab for the given route and direction, and start fetching. */
     create(routeId, direction) {
       const view = createView();
-      const tabIndex = addTab(`Route ${routeId}`, view);
+      const tabIndex = addTab(formatTabLabel(routeId), view);
       const tab = {
         tabIndex,
         route: routeId,
@@ -125,7 +135,7 @@ export function createTabManager({ createView, addTab, updateTabLabel, setStatus
     switchRoute(routeId) {
       const tab = activeTab();
       tab.route = routeId;
-      updateTabLabel(tab.tabIndex, `Route ${routeId}`);
+      updateTabLabel(tab.tabIndex, formatTabLabel(routeId));
       cancelTimers(tab);
       refreshAndDisplay(tab);
     },
