@@ -1,10 +1,10 @@
 import { busMarker, formatOccupancy } from '../utils.js';
-import { OCCUPANCY_LEVELS, BAR_TOTAL } from '../config.js';
+import { OCCUPANCY_LEVELS, BAR_TOTAL, COLORS } from '../config.js';
 
 export function occupancyBar(status) {
-  if (status === 'NOT_ACCEPTING_PASSENGERS') return '{red-fg}[×××××]{/red-fg}';
+  if (status === 'NOT_ACCEPTING_PASSENGERS') return `{${COLORS.red}-fg}[×××××]{/${COLORS.red}-fg}`;
   const level = OCCUPANCY_LEVELS.find(l => l.status === status);
-  if (!level) return '{grey-fg}[·····]{/grey-fg}';
+  if (!level) return `{${COLORS.inactive}-fg}[·····]{/${COLORS.inactive}-fg}`;
   const filled = '█'.repeat(level.filled) + '·'.repeat(BAR_TOTAL - level.filled);
   return `{${level.color}-fg}[${filled}]{/${level.color}-fg}`;
 }
@@ -37,12 +37,12 @@ export function statusLines(bus, placement, stops, lookup, vehiclePreds, INNER) 
   if (!placement) {
     // Unplaced vehicle — best-effort from raw stop lookup
     const s = lookup(bus.currentStopId);
-    return [`{grey-fg}→ {white-fg}${s?.name ?? ''}{/white-fg}{/grey-fg}`];
+    return [`{${COLORS.inactive}-fg}→ {${COLORS.active}-fg}${s?.name ?? ''}{/${COLORS.active}-fg}{/${COLORS.inactive}-fg}`];
   }
 
   if (bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT') {
     const currentStop = stops[placement.stopIdx];
-    const line1 = `{grey-fg}at {white-fg}${currentStop?.name ?? ''}{/white-fg}{/grey-fg}`;
+    const line1 = `{${COLORS.inactive}-fg}at {${COLORS.active}-fg}${currentStop?.name ?? ''}{/${COLORS.active}-fg}{/${COLORS.inactive}-fg}`;
 
     // Next: first future prediction for a stop with a different name than current
     const currentName = currentStop?.name ?? '';
@@ -52,7 +52,7 @@ export function statusLines(bus, placement, stops, lookup, vehiclePreds, INNER) 
       const time = p.arrivalTime ?? p.departureTime;
       const eta = fmtEta(time);
       if (!eta) continue;
-      return [line1, `{grey-fg}next: {white-fg}${s.name}{/white-fg} in {cyan-fg}${eta}{/cyan-fg}{/grey-fg}`];
+      return [line1, `{${COLORS.inactive}-fg}next: {${COLORS.active}-fg}${s.name}{/${COLORS.active}-fg} in {${COLORS.cyan}-fg}${eta}{/${COLORS.cyan}-fg}{/${COLORS.inactive}-fg}`];
     }
     return [line1];
   }
@@ -61,29 +61,29 @@ export function statusLines(bus, placement, stops, lookup, vehiclePreds, INNER) 
   const destStop = stops[placement.segmentIndex + 1];
   const destName = destStop?.name ?? '';
   const eta = etaForStop(vehiclePreds, destName, lookup);
-  const etaSuffix = eta ? ` {cyan-fg}in ${eta}{/cyan-fg}` : '';
+  const etaSuffix = eta ? ` {${COLORS.cyan}-fg}in ${eta}{/${COLORS.cyan}-fg}` : '';
 
   const dest = destName.slice(0, INNER - 5);
 
-  const line = `{grey-fg}→ {white-fg}${dest}{/white-fg}${etaSuffix}{/grey-fg}`;
+  const line = `{${COLORS.inactive}-fg}→ {${COLORS.active}-fg}${dest}{/${COLORS.active}-fg}${etaSuffix}{/${COLORS.inactive}-fg}`;
   return [line];
 }
 
 export function vehicleStatusLabel(status) {
   switch (status) {
-    case 'STOPPED_AT':    return '{yellow-fg}stopped{/yellow-fg}';
-    case 'INCOMING_AT':   return '{cyan-fg}arriving{/cyan-fg}';
-    case 'IN_TRANSIT_TO': return '{green-fg}moving{/green-fg}';
+    case 'STOPPED_AT':    return `{${COLORS.yellow}-fg}stopped{/${COLORS.yellow}-fg}`;
+    case 'INCOMING_AT':   return `{${COLORS.cyan}-fg}arriving{/${COLORS.cyan}-fg}`;
+    case 'IN_TRANSIT_TO': return `{${COLORS.green}-fg}moving{/${COLORS.green}-fg}`;
     default:              return null;
   }
 }
 
 export function miniCarBar(carriage) {
   if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
-    return '{red-fg}[×××××]{/red-fg}';
+    return `{${COLORS.red}-fg}[×××××]{/${COLORS.red}-fg}`;
   }
   if (!carriage.occupancyStatus || carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
-    return '{grey-fg}[·····]{/grey-fg}';
+    return `{${COLORS.inactive}-fg}[·····]{/${COLORS.inactive}-fg}`;
   }
   const level = OCCUPANCY_LEVELS.find(l => l.status === carriage.occupancyStatus);
   // Prefer status-based fill so color and fill are always consistent.
@@ -93,7 +93,7 @@ export function miniCarBar(carriage) {
     : carriage.occupancyPercentage != null
       ? Math.min(5, Math.round(carriage.occupancyPercentage / 20))
       : 0;
-  const color = level?.color ?? 'grey';
+  const color = level?.color ?? COLORS.inactive;
   const bar = '█'.repeat(filled) + '·'.repeat(5 - filled);
   return `{${color}-fg}[${bar}]{/${color}-fg}`;
 }
@@ -101,15 +101,15 @@ export function miniCarBar(carriage) {
 // Unified vehicle card renderer for buses and subway/rail vehicles.
 // Conditionally adds carriage bar line when bus.carriages.length > 0.
 export function renderVehicleCard(bus, placement, colorMap, stops, lookup, vehiclePreds, INNER) {
-  const color = colorMap.get(bus.id) || 'white';
+  const color = colorMap.get(bus.id) || COLORS.active;
   const char = busMarker(bus).char;
-  const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
+  const revenue = bus.revenue ? `{${COLORS.green}-fg}✓{/${COLORS.green}-fg}` : `{${COLORS.red}-fg}✗{/${COLORS.red}-fg}`;
   const label = (bus.label || bus.id).slice(0, 10);
-  const speedStr = bus.speed != null ? `{grey-fg}${Math.round(bus.speed * 2.23694)}mph{/grey-fg}` : null;
+  const speedStr = bus.speed != null ? `{${COLORS.inactive}-fg}${Math.round(bus.speed * 2.23694)}mph{/${COLORS.inactive}-fg}` : null;
   const statusLabel = vehicleStatusLabel(bus.currentStatus);
   const line1Right = [statusLabel, speedStr].filter(Boolean).join(' ');
 
-  const occupancyText = bus.occupancyStatus ? `{grey-fg}${formatOccupancy(bus.occupancyStatus)}{/grey-fg}` : '';
+  const occupancyText = bus.occupancyStatus ? `{${COLORS.inactive}-fg}${formatOccupancy(bus.occupancyStatus)}{/${COLORS.inactive}-fg}` : '';
   const isStopped = bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT';
   // STOPPED_AT / INCOMING_AT → show the stop being served (stopIdx = destination for INCOMING_AT)
   // IN_TRANSIT_TO / UNKNOWN  → show the stop departed from (segmentIndex)
@@ -126,8 +126,8 @@ export function renderVehicleCard(bus, placement, colorMap, stops, lookup, vehic
   const filteredLines = isStopped ? sLines.slice(1) : sLines;
 
   if (bus.carriages.length > 0) {
-    const carBars = bus.carriages.map((c, i) => `{grey-fg}${i + 1}{/grey-fg}${miniCarBar(c)}`).join(' ');
-    const line2 = carBars || '{grey-fg}no car data{/grey-fg}';
+    const carBars = bus.carriages.map((c, i) => `{${COLORS.inactive}-fg}${i + 1}{/${COLORS.inactive}-fg}${miniCarBar(c)}`).join(' ');
+    const line2 = carBars || `{${COLORS.inactive}-fg}no car data{/${COLORS.inactive}-fg}`;
     return [line1, line2, ...filteredLines];
   }
 

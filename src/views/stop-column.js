@@ -1,4 +1,5 @@
 import { busMarker } from '../utils.js';
+import { COLORS } from '../config.js';
 
 export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}) {
   const LABEL_WIDTH = Math.floor(innerWidth / 2) - 2;
@@ -26,21 +27,21 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
       ? stop.name.slice(0, maxNameLen - 1) + '…'
       : stop.name;
 
-    let marker = '{grey-fg}◉{/grey-fg}';
-    let nameColor = 'grey';
+    let marker = `{${COLORS.inactive}-fg}◉{/${COLORS.inactive}-fg}`;
+    let nameColor = COLORS.inactive;
     if (atStop.length > 0) {
       const p = atStop[0];
-      const color = colorMap.get(p.bus.id) || 'white';
+      const color = colorMap.get(p.bus.id) || COLORS.active;
       marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
       nameColor = color;
     } else if (inTransit.length > 0) {
       const p = inTransit[0];
-      const color = colorMap.get(p.bus.id) || 'white';
+      const color = colorMap.get(p.bus.id) || COLORS.active;
       marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
       nameColor = color;
     }
     const etaTag = etaStr
-      ? (eta === 'now' ? `{cyan-fg}${etaStr}{/cyan-fg}` : `{grey-fg}${etaStr}{/grey-fg}`)
+      ? (eta === 'now' ? `{${COLORS.cyan}-fg}${etaStr}{/${COLORS.cyan}-fg}` : `{${COLORS.inactive}-fg}${etaStr}{/${COLORS.inactive}-fg}`)
       : '';
     const nameTag = `{${nameColor}-fg}${name.padEnd(LABEL_WIDTH - (etaStr ? etaStr.length + 1 : 0))}{/${nameColor}-fg}${etaStr ? ' ' + etaTag : ''}`;
 
@@ -51,14 +52,14 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
 
       inTransit.forEach(p => {
         const pos = Math.max(1, Math.min(trackWidth - 2, Math.floor(p.proportion * (trackWidth - 2)) + 1));
-        const color = colorMap.get(p.bus.id) || 'white';
+        const color = colorMap.get(p.bus.id) || COLORS.active;
         track[pos] = { color, char: busMarker(p.bus).char };
       });
 
       trackPart = ' ' + track.map(ch =>
         typeof ch === 'object'
           ? `{${ch.color}-fg}${ch.char}{/${ch.color}-fg}`
-          : `{grey-fg}${ch}{/grey-fg}`
+          : `{${COLORS.inactive}-fg}${ch}{/${COLORS.inactive}-fg}`
       ).join('');
     }
 

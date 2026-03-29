@@ -1,6 +1,7 @@
 import blessed from 'blessed';
 import { showRouteSelector } from './overlays/route-selector.js';
 import { showHelp } from './overlays/help.js';
+import { COLORS } from './config.js';
 
 let screen = null;
 let tabBar = null;
@@ -34,7 +35,7 @@ export function initScreen() {
     width: '100%',
     height: 1,
     tags: true,
-    style: { bg: 'black' },
+    style: { bg: COLORS.activeBg },
   });
 
   statusBar = blessed.box({
@@ -43,7 +44,7 @@ export function initScreen() {
     width: '100%',
     height: 1,
     tags: true,
-    style: { bg: 'blue', fg: 'white' },
+    style: { bg: COLORS.statusBg, fg: COLORS.statusFg },
     content: ' [r] route  [n] new tab  [?] help  [q] quit',
   });
 
@@ -130,10 +131,10 @@ export function updateTabLabel(index, label) {
 function renderTabBar() {
   const parts = tabs.map((t, i) =>
     i === activeTabIndex
-      ? `{black-fg}{white-bg} ${t.label} {/white-bg}{/black-fg}`
-      : `{grey-fg} ${t.label} {/grey-fg}`
+      ? `{${COLORS.activeBg}-bg}{${COLORS.active}-fg} ${t.label} {/${COLORS.active}-fg}{/${COLORS.activeBg}-bg}`
+      : `{${COLORS.inactive}-fg} ${t.label} {/${COLORS.inactive}-fg}`
   );
-  tabBar.setContent(parts.join('{grey-fg}│{/grey-fg}'));
+  tabBar.setContent(parts.join(`{${COLORS.inactive}-fg}│{/${COLORS.inactive}-fg}`));
 }
 
 /**
