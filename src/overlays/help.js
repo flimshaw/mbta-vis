@@ -1,4 +1,5 @@
 import blessed from 'blessed';
+import { COLORS } from '../config.js';
 
 let overlay = null;
 
@@ -18,25 +19,25 @@ export function showHelp(screen) {
     border: { type: 'line' },
     label: ' Help ',
     tags: true,
-    style: { border: { fg: 'yellow' } },
+    style: { border: { fg: COLORS.border } },
     content: [
       '',
       '  {bold}Keyboard Shortcuts{/bold}',
       '',
-      '  {cyan-fg}n{/cyan-fg}       New tab',
-      '  {cyan-fg}r{/cyan-fg}       Open route selector',
-      '  {cyan-fg}d{/cyan-fg}       Toggle inbound/outbound',
-      '  {cyan-fg}↑↓ / j k{/cyan-fg} Scroll stops list',
-      '  {cyan-fg}PgUp/Dn{/cyan-fg} Scroll stops by 10',
-      '  {cyan-fg}?{/cyan-fg}       Toggle this help',
-      '  {cyan-fg}← →{/cyan-fg}     Switch tabs (or mode in selector)',
-      '  {cyan-fg}1-9{/cyan-fg}     Jump to tab',
-      '  {cyan-fg}q{/cyan-fg}       Quit',
+      `  {${COLORS.cyan}-fg}n{/${COLORS.cyan}-fg}       New tab`,
+      `  {${COLORS.cyan}-fg}r{/${COLORS.cyan}-fg}       Open route selector`,
+      `  {${COLORS.cyan}-fg}d{/${COLORS.cyan}-fg}       Toggle inbound/outbound`,
+      `  {${COLORS.cyan}-fg}↑↓ / j k{/${COLORS.cyan}-fg} Scroll stops list`,
+      `  {${COLORS.cyan}-fg}PgUp/Dn{/${COLORS.cyan}-fg} Scroll stops by 10`,
+      `  {${COLORS.cyan}-fg}?{/${COLORS.cyan}-fg}       Toggle this help`,
+      `  {${COLORS.cyan}-fg}← →{/${COLORS.cyan}-fg}     Switch tabs (or mode in selector)`,
+      `  {${COLORS.cyan}-fg}1-9{/${COLORS.cyan}-fg}     Jump to tab`,
+      `  {${COLORS.cyan}-fg}q{/${COLORS.cyan}-fg}       Quit`,
       '',
       '  {bold}Bus Status Icons{/bold}',
       '',
-      '  {yellow-fg}■{/yellow-fg}  STOPPED_AT    {green-fg}▶{/green-fg}  IN_TRANSIT_TO',
-      '  {cyan-fg}▷{/cyan-fg}  INCOMING_AT',
+      `  {${COLORS.yellow}-fg}■{/${COLORS.yellow}-fg}  STOPPED_AT    {${COLORS.green}-fg}▶{/${COLORS.green}-fg}  IN_TRANSIT_TO`,
+      `  {${COLORS.cyan}-fg}▷{/${COLORS.cyan}-fg}  INCOMING_AT`,
     ].join('\n'),
   });
 

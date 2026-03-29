@@ -1,4 +1,5 @@
 import blessed from 'blessed';
+import { COLORS } from '../config.js';
 
 let overlay = null;
 
@@ -28,7 +29,7 @@ export function showRouteSelector(screen, cachedModes, onSelect) {
     label: buildModeLabel(modes, activeModeIdx),
     tags: true,
     mouse: true,
-    style: { selected: { bg: 'blue', fg: 'white' }, border: { fg: 'cyan' } },
+    style: { selected: { bg: COLORS.statusBg, fg: COLORS.statusFg }, border: { fg: COLORS.border } },
     items: currentRoutes().map(fmtItem),
   });
 
@@ -89,8 +90,8 @@ export function showRouteSelector(screen, cachedModes, onSelect) {
 function buildModeLabel(modes, activeModeIdx) {
   const parts = modes.map((m, i) =>
     i === activeModeIdx
-      ? `{black-fg}{white-bg} ${m.label} {/white-bg}{/black-fg}`
-      : `{grey-fg} ${m.label} {/grey-fg}`
+      ? `{${COLORS.activeBg}-bg}{${COLORS.active}-fg} ${m.label} {/${COLORS.active}-fg}{/${COLORS.activeBg}-bg}`
+      : `{${COLORS.inactive}-fg} ${m.label} {/${COLORS.inactive}-fg}`
   );
   return ` ${parts.join('')} `;
 }

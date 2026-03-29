@@ -13,32 +13,40 @@ export const RIGHT_WIDTH = 68;
 // Direction labels indexed by directionId (0 = Outbound, 1 = Inbound)
 export const DIRECTION_LABELS = ['Outbound', 'Inbound'];
 
-// Color palette for per-vehicle identity coloring.
-// Avoid red (reserved for errors) and grey (inactive stops).
-export const BUS_PALETTE = [
-  '#4dabf7', // sky blue
-  '#69db7c', // green
-  '#ffd43b', // yellow
-  '#da77f2', // violet
-  '#ff922b', // orange
-  '#38d9a9', // teal
-  '#f783ac', // pink
-  '#a9e34b', // lime
-  '#74c0fc', // light blue
-  '#e599f7', // lavender
-  '#63e6be', // mint
-  '#ffa8a8', // salmon
-];
+// Import theme system for terminal-compatible colors
+import { THEME, OVERRIDE_THEME, getThemeByName } from './theme.js';
 
-// Occupancy levels in increasing order, used to build fill bars
+// Use override theme if set, otherwise use detected theme
+const activeTheme = OVERRIDE_THEME ? getThemeByName(OVERRIDE_THEME) : THEME;
+
+// Color palette for per-vehicle identity coloring (theme-aware)
+export const BUS_PALETTE = activeTheme.palette;
+
+// Occupancy levels in increasing order, used to build fill bars (theme-aware colors)
 export const OCCUPANCY_LEVELS = [
-  { status: 'EMPTY',                      filled: 0, color: 'green'  },
-  { status: 'MANY_SEATS_AVAILABLE',       filled: 1, color: 'green'  },
-  { status: 'FEW_SEATS_AVAILABLE',        filled: 2, color: 'yellow' },
-  { status: 'STANDING_ROOM_ONLY',         filled: 3, color: 'yellow' },
-  { status: 'CRUSHED_STANDING_ROOM_ONLY', filled: 4, color: 'red'    },
-  { status: 'FULL',                       filled: 5, color: 'red'    },
-  { status: 'NOT_ACCEPTING_PASSENGERS',   filled: 5, color: 'red'    },
-  { status: 'NO_DATA_AVAILABLE',          filled: 0, color: 'grey'   },
+  { status: 'EMPTY',                      filled: 0, color: activeTheme.green  },
+  { status: 'MANY_SEATS_AVAILABLE',       filled: 1, color: activeTheme.green  },
+  { status: 'FEW_SEATS_AVAILABLE',        filled: 2, color: activeTheme.yellow },
+  { status: 'STANDING_ROOM_ONLY',         filled: 3, color: activeTheme.yellow },
+  { status: 'CRUSHED_STANDING_ROOM_ONLY', filled: 4, color: activeTheme.red    },
+  { status: 'FULL',                       filled: 5, color: activeTheme.red    },
+  { status: 'NOT_ACCEPTING_PASSENGERS',   filled: 5, color: activeTheme.red    },
+  { status: 'NO_DATA_AVAILABLE',          filled: 0, color: activeTheme.barInactive   },
 ];
 export const BAR_TOTAL = 5;
+
+// Theme-aware color helpers for views
+export const COLORS = {
+  inactive: activeTheme.inactive,
+  active: activeTheme.active,
+  activeBg: activeTheme.activeBg,
+  cyan: activeTheme.cyan,
+  green: activeTheme.green,
+  yellow: activeTheme.yellow,
+  red: activeTheme.red,
+  blue: activeTheme.blue,
+  barInactive: activeTheme.barInactive,
+  barActive: activeTheme.barActive,
+  statusFg: activeTheme.statusFg,
+  statusBg: activeTheme.statusBg,
+};

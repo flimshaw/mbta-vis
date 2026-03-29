@@ -1,7 +1,7 @@
 import blessed from 'blessed';
 import { getScreen } from '../screen.js';
 import { placeBuses, busColor } from '../utils.js';
-import { RIGHT_WIDTH, DIRECTION_LABELS } from '../config.js';
+import { RIGHT_WIDTH, DIRECTION_LABELS, COLORS } from '../config.js';
 import { createStopLookup } from '../domain/stop-lookup.js';
 import { renderColumn } from './stop-column.js';
 import { occupancyBar, fmtEta, etaForStop, statusLines, vehicleStatusLabel, miniCarBar, renderVehicleCard, padBetween } from './vehicle-card.js';
@@ -36,7 +36,7 @@ export function createRouteView() {
     height: '100%',
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'grey', bg: 'black' }, bg: 'black' },
+    style: { border: { fg: COLORS.border }, bg: 'black' },
   });
   const rightPane = blessed.box({
     top: 0, right: 0,
@@ -47,7 +47,7 @@ export function createRouteView() {
     label: ' Vehicles ',
     scrollable: true,
     alwaysScroll: true,
-    style: { border: { fg: 'grey', bg: 'black' }, bg: 'black' },
+    style: { border: { fg: COLORS.border }, bg: 'black' },
   });
   box.append(leftPane);
   box.append(rightPane);
@@ -89,9 +89,9 @@ export function createRouteView() {
 
     const dir = DIRECTION_LABELS[directionId];
     const scrollInfo = stops.length > pageSize
-      ? ` {grey-fg}[${scrollOffset + 1}–${Math.min(scrollOffset + pageSize, stops.length)}/${stops.length}]{/grey-fg}`
+      ? ` {${COLORS.inactive}-fg}[${scrollOffset + 1}–${Math.min(scrollOffset + pageSize, stops.length)}/${stops.length}]{/${COLORS.inactive}-fg}`
       : '';
-    const header = `{bold}{cyan-fg}Route ${routeNumber} — ${dir}{/cyan-fg}{/bold}  {grey-fg}${buses.length} vehicle(s){/grey-fg}${scrollInfo}`;
+    const header = `{bold}{${COLORS.cyan}-fg}Route ${routeNumber} — ${dir}{/${COLORS.cyan}-fg}{/bold}  {${COLORS.inactive}-fg}${buses.length} vehicle(s){/${COLORS.inactive}-fg}${scrollInfo}`;
 
     // Translate global segment indices to local (accounting for scroll offset)
     const localSegBuses = {};
@@ -143,7 +143,7 @@ export function createRouteView() {
 
 function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId) {
   if (buses.length === 0) {
-    rightPane.setContent('{grey-fg}No vehicles{/grey-fg}');
+    rightPane.setContent(`{${COLORS.inactive}-fg}No vehicles{/${COLORS.inactive}-fg}`);
     return;
   }
 
@@ -159,7 +159,7 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, 
     return ia - ib;
   });
 
-  const divider = `{grey-fg}${'─'.repeat(INNER)}{/grey-fg}`;
+  const divider = `{${COLORS.inactive}-fg}${'─'.repeat(INNER)}/{/${COLORS.inactive}-fg}`;
 
   const cards = sortedBuses.flatMap(bus => {
     const vehiclePreds = predictions[bus.id] ?? [];
