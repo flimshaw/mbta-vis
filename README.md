@@ -4,37 +4,45 @@ A real-time terminal UI for tracking MBTA buses and subway trains, showing live 
 
 ![screenshot](./screenshot.jpg)
 
-## Requirements
-
-- Node.js 18+
-- Internet connection
-
-## Installation
+## Install
 
 ```bash
-git clone <repository-url>
-cd mbta-vis
-npm install
+npm install -g mbta-vis
 ```
 
-No API key is required — the MBTA API is public and works unauthenticated. If you're running multiple tabs or refreshing frequently, you may hit the anonymous rate limit (20 req/min). To get a higher limit, grab a free key from [api.mbta.com](https://api.mbta.com) and add it:
+Then run:
 
 ```bash
-cp .env.example .env
-# edit .env and set MBTA_API_KEY=your_key_here
+mbta-vis [route] [direction]
 ```
 
 ## Usage
 
 ```bash
-node src/main.js [route] [direction]
+mbta-vis [route] [direction]
 
 # Examples
-node src/main.js 87 0    # Route 87, outbound
-node src/main.js Green-D 1  # Green Line D, inbound
+mbta-vis 87 0        # Route 87, outbound
+mbta-vis 57 1        # Route 57, inbound
+mbta-vis Green-D 0   # Green Line D, outbound
 ```
 
 Defaults to route `87`, direction `0` (outbound).
+
+## Requirements
+
+- Node.js 18+
+- Internet connection
+
+## API Key
+
+No API key is required — the MBTA API is public and works unauthenticated. If you're running multiple tabs or refreshing frequently, you may hit the anonymous rate limit (20 req/min). To get a higher limit, grab a free key from [api.mbta.com](https://api.mbta.com) and set it in your shell:
+
+```bash
+export MBTA_API_KEY=your_key_here
+```
+
+Add that line to your `~/.zshrc` or `~/.bashrc` to make it permanent.
 
 ## Interface
 
@@ -61,16 +69,20 @@ The display is split into two panes:
 | `?` | Help overlay |
 | `q` / Ctrl-C | Quit |
 
-## Project Structure
+## Local Development
 
+```bash
+git clone <repository-url>
+cd mbta-vis
+npm install
+node src/main.js [route] [direction]
 ```
-src/
-  main.js           — entry point, fetch/refresh loop
-  mbta-api.js       — MBTA API v3 calls and response parsers
-  utils.js          — bus placement, color palette, markers
-  screen.js         — blessed screen, tab bar, status bar, overlays
-  views/
-    route-view.js   — split-pane route visualization
+
+If running from source, you can also use a `.env` file for the API key:
+
+```bash
+cp .env.example .env
+# edit .env and set MBTA_API_KEY=your_key_here
 ```
 
 ## License
