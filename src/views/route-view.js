@@ -1,10 +1,14 @@
 import blessed from 'blessed';
 import { getScreen } from '../screen.js';
-import { placeBuses, busMarker, busColor, formatOccupancy } from '../utils.js';
+import { placeBuses, busColor } from '../utils.js';
+import { RIGHT_WIDTH, DIRECTION_LABELS } from '../config.js';
+import { createStopLookup } from '../domain/stop-lookup.js';
+import { renderColumn } from './stop-column.js';
+import { occupancyBar, fmtEta, etaForStop, statusLines, vehicleStatusLabel, miniCarBar, renderVehicleCard, padBetween } from './vehicle-card.js';
 
 /**
  * Create a route visualization view.
- * @returns {{ box: BlessedBox, update: function }}
+ * @returns {{ box: BlessedBox, update: function, scroll: function }}
  */
 export function createRouteView() {
   // Box dimensions are set by addTab; use percentage fallbacks
@@ -15,8 +19,6 @@ export function createRouteView() {
     height: '100%-2',
     tags: true,
   });
-
-  const RIGHT_WIDTH = 68; // vehicle pane width including border
 
   // Persistent color assignments so bus colors stay stable across refreshes
   const colorMap = new Map();
@@ -85,7 +87,7 @@ export function createRouteView() {
       (segmentBuses[p.segmentIndex] ??= []).push(p);
     });
 
-    const dir = directionId === 0 ? 'Outbound' : 'Inbound';
+    const dir = DIRECTION_LABELS[directionId];
     const scrollInfo = stops.length > pageSize
       ? ` {grey-fg}[${scrollOffset + 1}–${Math.min(scrollOffset + pageSize, stops.length)}/${stops.length}]{/grey-fg}`
       : '';
@@ -102,13 +104,12 @@ export function createRouteView() {
 
     // Build stopName → earliest ETA string from predictions, for all vehicles
     const stopEtas = {};
-    const extraStopById = Object.fromEntries(extraStops.map(s => [s.id, s]));
-    const routeStopById = Object.fromEntries(stops.map(s => [s.id, s]));
+    const lookup = createStopLookup(stops, extraStops);
     for (const vehiclePreds of Object.values(predictions)) {
       for (const p of vehiclePreds) {
         const time = p.arrivalTime ?? p.departureTime;
         if (!time) continue;
-        const s = routeStopById[p.stopId] ?? extraStopById[p.stopId];
+        const s = lookup(p.stopId);
         if (!s) continue;
         const eta = fmtEta(time);
         if (!eta) continue;
@@ -140,186 +141,13 @@ export function createRouteView() {
   return { box, update, scroll };
 }
 
-// Occupancy levels in increasing order, used to build the fill bar
-const OCCUPANCY_LEVELS = [
-  { status: 'EMPTY',                      filled: 0, color: 'green'   },
-  { status: 'MANY_SEATS_AVAILABLE',       filled: 1, color: 'green'   },
-  { status: 'FEW_SEATS_AVAILABLE',        filled: 2, color: 'yellow'  },
-  { status: 'STANDING_ROOM_ONLY',         filled: 3, color: 'yellow'  },
-  { status: 'CRUSHED_STANDING_ROOM_ONLY', filled: 4, color: 'red'     },
-  { status: 'FULL',                       filled: 5, color: 'red'     },
-  { status: 'NOT_ACCEPTING_PASSENGERS',   filled: 5, color: 'red'     },
-  { status: 'NO_DATA_AVAILABLE',          filled: 0, color: 'grey'    },
-];
-const BAR_TOTAL = 5;
-
-function occupancyBar(status) {
-  if (status === 'NOT_ACCEPTING_PASSENGERS') return '{red-fg}[×××××]{/red-fg}';
-  const level = OCCUPANCY_LEVELS.find(l => l.status === status);
-  if (!level) return '{grey-fg}[·····]{/grey-fg}';
-  const filled = '█'.repeat(level.filled) + '·'.repeat(BAR_TOTAL - level.filled);
-  return `{${level.color}-fg}[${filled}]{/${level.color}-fg}`;
-}
-
-// Format a prediction arrival/departure time as a relative ETA string.
-function fmtEta(isoTime) {
-  if (!isoTime) return null;
-  const diffMs = new Date(isoTime) - Date.now();
-  const diffMin = Math.round(diffMs / 60000);
-  if (diffMin < 0) return null; // already passed
-  if (diffMin === 0) return 'now';
-  return `${diffMin}m`;
-}
-
-// Return the ETA string for a prediction matching targetStopName, or null.
-function etaForStop(vehiclePreds, targetStopName, stopById, extraStopById) {
-  for (const p of vehiclePreds) {
-    const s = stopById[p.stopId] ?? extraStopById[p.stopId];
-    if (!s || s.name !== targetStopName) continue;
-    const time = p.arrivalTime ?? p.departureTime;
-    const eta = fmtEta(time);
-    if (eta) return eta;
-  }
-  return null;
-}
-
-// Build 1–2 status lines for a vehicle card, using placement indices so stop
-// names are always sourced from the route stop list (not child stop IDs).
-function statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER) {
-  if (!placement) {
-    // Unplaced vehicle — best-effort from raw stop lookup
-    const s = extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId];
-    return [`{grey-fg}→ {white-fg}${s?.name ?? ''}{/white-fg}{/grey-fg}`];
-  }
-
-  if (bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT') {
-    const currentStop = stops[placement.stopIdx];
-    const line1 = `{grey-fg}at {white-fg}${currentStop?.name ?? ''}{/white-fg}{/grey-fg}`;
-
-    // Next: first future prediction for a stop with a different name than current
-    const currentName = currentStop?.name ?? '';
-    for (const p of vehiclePreds) {
-      const s = stopById[p.stopId] ?? extraStopById[p.stopId];
-      if (!s || s.name === currentName) continue;
-      const time = p.arrivalTime ?? p.departureTime;
-      const eta = fmtEta(time);
-      if (!eta) continue;
-      return [line1, `{grey-fg}next: {white-fg}${s.name}{/white-fg} in {cyan-fg}${eta}{/cyan-fg}{/grey-fg}`];
-    }
-    return [line1];
-  }
-
-  // IN_TRANSIT_TO / UNKNOWN — show from → dest with inline ETA
-  const destStop = stops[placement.segmentIndex + 1];
-  const destName = destStop?.name ?? '';
-  const eta = etaForStop(vehiclePreds, destName, stopById, extraStopById);
-  const etaSuffix = eta ? ` {cyan-fg}in ${eta}{/cyan-fg}` : '';
-
-  const dest = destName.slice(0, INNER - 5);
-
-  const line = `{grey-fg}→ {white-fg}${dest}{/white-fg}${etaSuffix}{/grey-fg}`;
-  return [line];
-}
-
-function vehicleStatusLabel(status) {
-  switch (status) {
-    case 'STOPPED_AT':    return '{yellow-fg}stopped{/yellow-fg}';
-    case 'INCOMING_AT':   return '{cyan-fg}arriving{/cyan-fg}';
-    case 'IN_TRANSIT_TO': return '{green-fg}moving{/green-fg}';
-    default:              return null;
-  }
-}
-
-function miniCarBar(carriage) {
-  if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
-    return '{red-fg}[×××××]{/red-fg}';
-  }
-  if (!carriage.occupancyStatus || carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
-    return '{grey-fg}[·····]{/grey-fg}';
-  }
-  const level = OCCUPANCY_LEVELS.find(l => l.status === carriage.occupancyStatus);
-  // Prefer status-based fill so color and fill are always consistent.
-  // Fall back to percentage only when status is absent or carries no fill info.
-  const filled = level
-    ? level.filled
-    : carriage.occupancyPercentage != null
-      ? Math.min(5, Math.round(carriage.occupancyPercentage / 20))
-      : 0;
-  const color = level?.color ?? 'grey';
-  const bar = '█'.repeat(filled) + '·'.repeat(5 - filled);
-  return `{${color}-fg}[${bar}]{/${color}-fg}`;
-}
-
-
-function renderBusCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
-  const color = colorMap.get(bus.id) || 'white';
-  const char = busMarker(bus).char;
-  const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
-  const label = (bus.label || bus.id).slice(0, 6);
-  const speedStr = bus.speed != null ? `{grey-fg}${Math.round(bus.speed * 2.23694)}mph{/grey-fg}` : null;
-  const statusLabel = vehicleStatusLabel(bus.currentStatus);
-  const line1Right = [statusLabel, speedStr].filter(Boolean).join(' ');
-
-  const occupancyText = bus.occupancyStatus ? `{grey-fg}${formatOccupancy(bus.occupancyStatus)}{/grey-fg}` : '';
-  const isStopped = bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT';
-  // STOPPED_AT / INCOMING_AT → show the stop being served (stopIdx = destination for INCOMING_AT)
-  // IN_TRANSIT_TO / UNKNOWN  → show the stop departed from (segmentIndex)
-  const displayName = isStopped
-    ? (placement ? stops[placement.stopIdx]?.name : null)
-      ?? (extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId])?.name
-    : (placement ? stops[placement.segmentIndex]?.name : null);
-  const line1Left = displayName
-    ? `{${color}-fg}${char} ${displayName}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`
-    : `{${color}-fg}${char} #${label}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`;
-  const line1 = padBetween(line1Left, line1Right, INNER);
-
-  const sLines = statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER);
-  // "at [stop]" is now on line 1 — skip it from statusLines output
-  const filteredLines = isStopped ? sLines.slice(1) : sLines;
-  return [line1, ...filteredLines];
-}
-
-function renderSubwayCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER) {
-  const color = colorMap.get(bus.id) || 'white';
-  const char = busMarker(bus).char;
-  const revenue = bus.revenue ? '{green-fg}✓{/green-fg}' : '{red-fg}✗{/red-fg}';
-  const label = (bus.label || bus.id).slice(0, 10);
-  const speedStr = bus.speed != null ? `{grey-fg}${Math.round(bus.speed * 2.23694)}mph{/grey-fg}` : null;
-  const statusLabel = vehicleStatusLabel(bus.currentStatus);
-  const line1Right = [statusLabel, speedStr].filter(Boolean).join(' ');
-
-  const occupancyText = bus.occupancyStatus ? `{grey-fg}${formatOccupancy(bus.occupancyStatus)}{/grey-fg}` : '';
-  const isStopped = bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT';
-  // STOPPED_AT / INCOMING_AT → show the stop being served (stopIdx = destination for INCOMING_AT)
-  // IN_TRANSIT_TO / UNKNOWN  → show the stop departed from (segmentIndex)
-  const displayName = isStopped
-    ? (placement ? stops[placement.stopIdx]?.name : null)
-      ?? (extraStopById[bus.currentStopId] ?? stopById[bus.currentStopId])?.name
-    : (placement ? stops[placement.segmentIndex]?.name : null);
-  const line1Left = displayName
-    ? `{${color}-fg}${char} ${displayName}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`
-    : `{${color}-fg}${char} #${label}{/${color}-fg} ${revenue}${occupancyText ? ' ' + occupancyText : ''}`;
-  const line1 = padBetween(line1Left, line1Right, INNER);
-
-  const carBars = bus.carriages.map((c, i) => `{grey-fg}${i + 1}{/grey-fg}${miniCarBar(c)}`).join(' ');
-  const line2 = carBars || '{grey-fg}no car data{/grey-fg}';
-
-  const sLines = statusLines(bus, placement, stops, stopById, extraStopById, vehiclePreds, INNER);
-  const filteredLines = isStopped ? sLines.slice(1) : sLines;
-  return [line1, line2, ...filteredLines];
-}
-
 function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId) {
   if (buses.length === 0) {
     rightPane.setContent('{grey-fg}No vehicles{/grey-fg}');
     return;
   }
 
-  const stopById = {};
-  stops.forEach(s => { stopById[s.id] = s; });
-  const extraStopById = {};
-  extraStops.forEach(s => { extraStopById[s.id] = s; });
-
+  const lookup = createStopLookup(stops, extraStops);
   const INNER = rightPane.width - 2; // inner width accounts for border
 
   // Sort vehicles by their stop index so order matches the stop list top-to-bottom
@@ -336,9 +164,7 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, 
   const cards = sortedBuses.flatMap(bus => {
     const vehiclePreds = predictions[bus.id] ?? [];
     const placement = placedByVehicleId[bus.id] ?? null;
-    const cardLines = bus.carriages.length > 0
-      ? renderSubwayCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER)
-      : renderBusCard(bus, placement, colorMap, stops, extraStopById, stopById, vehiclePreds, INNER);
+    const cardLines = renderVehicleCard(bus, placement, colorMap, stops, lookup, vehiclePreds, INNER);
     return [...cardLines, divider];
   });
 
@@ -346,82 +172,4 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, 
   cards.pop();
 
   rightPane.setContent(cards.join('\n'));
-}
-
-// Lay out left and right text in a fixed-width field.
-// Strips blessed tags ({anything}) before measuring visible character width.
-function padBetween(left, right, totalWidth) {
-  const visibleLen = s => s.replace(/\{[^}]+\}/g, '').length;
-  const gap = Math.max(1, totalWidth - visibleLen(left) - visibleLen(right));
-  return left + ' '.repeat(gap) + right;
-}
-
-function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}) {
-  const LABEL_WIDTH = Math.floor(innerWidth / 2) - 2;
-  const trackWidth = Math.max(4, innerWidth - LABEL_WIDTH - 3);
-  const lines = [];
-
-  for (let i = 0; i < stops.length; i++) {
-    const stop = stops[i];
-    if (!stop?.name) continue;
-
-    const atStop = Object.values(segmentBuses).flat().filter(
-      p => (p.bus.currentStatus === 'STOPPED_AT' || p.bus.currentStatus === 'INCOMING_AT')
-        && p.stopIdx === i + globalOffset
-    );
-
-    const inTransit = (segmentBuses[i] ?? []).filter(
-      p => p.bus.currentStatus === 'IN_TRANSIT_TO' || p.bus.currentStatus === 'UNKNOWN'
-    );
-
-    const hasActivity = atStop.length > 0 || inTransit.length > 0;
-
-    // Build label: name + ETA hint, both fitting within LABEL_WIDTH
-    const eta = stopEtas[stop.name];
-    const etaStr = eta ? `(${eta})` : '';
-    const maxNameLen = etaStr ? LABEL_WIDTH - etaStr.length - 1 : LABEL_WIDTH;
-    const name = stop.name.length > maxNameLen
-      ? stop.name.slice(0, maxNameLen - 1) + '…'
-      : stop.name;
-
-    let marker = '{grey-fg}◉{/grey-fg}';
-    let nameColor = 'grey';
-    if (atStop.length > 0) {
-      const p = atStop[0];
-      const color = colorMap.get(p.bus.id) || 'white';
-      marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
-      nameColor = color;
-    } else if (inTransit.length > 0) {
-      const p = inTransit[0];
-      const color = colorMap.get(p.bus.id) || 'white';
-      marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
-      nameColor = color;
-    }
-    const etaTag = etaStr
-      ? (eta === 'now' ? `{cyan-fg}${etaStr}{/cyan-fg}` : `{grey-fg}${etaStr}{/grey-fg}`)
-      : '';
-    const nameTag = `{${nameColor}-fg}${name.padEnd(LABEL_WIDTH - (etaStr ? etaStr.length + 1 : 0))}{/${nameColor}-fg}${etaStr ? ' ' + etaTag : ''}`;
-
-    let trackPart = '';
-    if (!(i === stops.length - 1 && !hasMoreStops)) {
-      const track = Array(trackWidth).fill('·');
-      track[0] = '╎';
-
-      inTransit.forEach(p => {
-        const pos = Math.max(1, Math.min(trackWidth - 2, Math.floor(p.proportion * (trackWidth - 2)) + 1));
-        const color = colorMap.get(p.bus.id) || 'white';
-        track[pos] = { color, char: busMarker(p.bus).char };
-      });
-
-      trackPart = ' ' + track.map(ch =>
-        typeof ch === 'object'
-          ? `{${ch.color}-fg}${ch.char}{/${ch.color}-fg}`
-          : `{grey-fg}${ch}{/grey-fg}`
-      ).join('');
-    }
-
-    lines.push(`${marker} ${nameTag}${trackPart}`);
-  }
-
-  return lines;
 }
