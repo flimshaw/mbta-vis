@@ -1,5 +1,5 @@
 import { fetchBusRoutes, fetchSubwayRoutes } from './mbta-api.js';
-import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, onScroll, openRouteSelector, setActiveTab } from './screen.js';
+import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, onScroll, openRouteSelector, setActiveTab, getRouteName } from './screen.js';
 import { createRouteView } from './views/route-view.js';
 import { DEFAULT_ROUTE, DEFAULT_DIRECTION } from './config.js';
 import { createTabManager } from './tab-manager.js';
@@ -18,6 +18,7 @@ export async function main() {
     setStatus,
     setActiveTab,
     openRouteSelector,
+    getRouteName,
   });
 
   onRouteSelect(routeId => tm.handleRouteSelect(routeId));
