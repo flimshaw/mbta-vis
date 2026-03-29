@@ -1,3 +1,5 @@
+import { BUS_PALETTE } from './config.js';
+
 /**
  * Calculate the haversine distance between two coordinates
  * @param {number} lat1 - Latitude of first point
@@ -149,24 +151,6 @@ export function placeBuses(buses, stops) {
     return [{ bus, segmentIndex, proportion, stopIdx }];
   });
 }
-
-// Palette of distinct colors for per-bus identity coloring.
-// Hex values for brightness and variety on dark terminals.
-// Avoid red (reserved for errors) and grey (inactive stops).
-const BUS_PALETTE = [
-  '#4dabf7', // sky blue
-  '#69db7c', // green
-  '#ffd43b', // yellow
-  '#da77f2', // violet
-  '#ff922b', // orange
-  '#38d9a9', // teal
-  '#f783ac', // pink
-  '#a9e34b', // lime
-  '#74c0fc', // light blue
-  '#e599f7', // lavender
-  '#63e6be', // mint
-  '#ffa8a8', // salmon
-];
 
 /**
  * Assign a stable color to a bus ID from the palette.
