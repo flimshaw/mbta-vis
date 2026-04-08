@@ -59,18 +59,6 @@ export function calculatePositionProportion(busLat, busLon, stop1Lat, stop1Lon, 
 }
 
 /**
- * Format distance for display
- * @param {number} meters - Distance in meters
- * @returns {string} - Formatted distance string
- */
-export function formatDistance(meters) {
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(1)} km`;
-  }
-  return `${Math.round(meters)} m`;
-}
-
-/**
  * Find which segment a bus belongs to (closest segment by distance)
  * @param {object} bus - Parsed bus object with latitude/longitude
  * @param {Array} stops - Array of parsed stop objects
@@ -199,29 +187,4 @@ export function formatOccupancy(status) {
   }
 }
 
-/**
- * Format time for display
- * @param {string} isoString - ISO 8601 timestamp
- * @returns {string} - Formatted time string
- */
-export function formatTime(isoString) {
-  if (!isoString) return 'Unknown';
-  
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now - date;
-  
-  // If within 5 minutes, show "Just now"
-  if (diffMs < 5 * 60 * 1000) {
-    return 'Just now';
-  }
-  
-  // If within 1 hour, show minutes ago
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  }
-  
-  // Otherwise show HH:MM
-  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-}
+

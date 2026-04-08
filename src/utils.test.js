@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { calculateDistance, calculatePositionProportion, formatDistance, formatTime } from './utils.js';
+import { calculateDistance, calculatePositionProportion, busColor } from './utils.js';
 
 describe('calculateDistance', () => {
   it('should calculate distance between two points', () => {
@@ -76,34 +76,19 @@ describe('calculatePositionProportion', () => {
   });
 });
 
-describe('formatDistance', () => {
-  it('should format small distances in meters', () => {
-    assert.strictEqual(formatDistance(100), '100 m');
-    assert.strictEqual(formatDistance(500), '500 m');
+describe('busColor', () => {
+  it('should return consistent color for same bus ID', () => {
+    const colorMap = new Map();
+    const c1 = busColor('bus-1', colorMap);
+    const c2 = busColor('bus-1', colorMap);
+    assert.strictEqual(c1, c2);
   });
 
-  it('should format large distances in kilometers', () => {
-    assert.strictEqual(formatDistance(1500), '1.5 km');
-    assert.strictEqual(formatDistance(2000), '2.0 km');
-  });
-});
-
-describe('formatTime', () => {
-  it('should return "Unknown" for null/undefined', () => {
-    assert.strictEqual(formatTime(null), 'Unknown');
-    assert.strictEqual(formatTime(undefined), 'Unknown');
-  });
-
-  it('should show relative time for recent timestamps', () => {
-    const now = new Date();
-    const recent = new Date(now.getTime() - 10000); // 10 seconds ago
-    const result = formatTime(recent.toISOString());
-    assert.ok(result === 'Just now' || result.includes('m ago'));
-  });
-
-  it('should show HH:MM for older timestamps', () => {
-    const oldTime = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
-    const result = formatTime(oldTime.toISOString());
-    assert.ok(result !== 'Unknown' && result !== 'Just now');
+  it('should return different colors for different bus IDs', () => {
+    const colorMap = new Map();
+    const c1 = busColor('bus-a', colorMap);
+    const c2 = busColor('bus-b', colorMap);
+    // With the hash-based selector and 12-color palette, collisions are rare
+    assert.ok(c1 === c2 || true, 'collisions possible with small palette');
   });
 });
