@@ -99,6 +99,7 @@ export function findBusSegment(bus, stops) {
 /**
  * Place all buses onto their segments, returning clean placement objects.
  * Avoids mutating bus objects.
+ * Uses current_stop_sequence to determine which segment, GPS for proportion.
  * @param {Array} buses - Parsed bus objects
  * @param {Array} stops - Parsed stop objects
  * @param {object|null} lookup - Optional stop lookup with resolveToRouteStop() method
@@ -106,36 +107,68 @@ export function findBusSegment(bus, stops) {
  */
 export function placeBuses(buses, stops, lookup = null) {
   return buses.flatMap(bus => {
-    // Prefer stop-ID-based placement: the API tells us exactly which stop the
-    // vehicle is at or heading to, which is far more reliable than GPS nearest-segment.
-    let destIdx = stops.findIndex(s => s.id === bus.currentStopId);
+    // Use current_stop_sequence as the source of truth for which stop the vehicle is at.
+    // This is more reliable than currentStopId (which can be a child stop) or GPS.
+    const seq = bus.currentStopSequence;
 
-    // 2. Resolve child → parent route stop via lookup
-    if (destIdx < 0 && lookup?.resolveToRouteStop && bus.currentStopId) {
-      const parent = lookup.resolveToRouteStop(bus.currentStopId);
-      if (parent) destIdx = stops.findIndex(s => s.id === parent.id);
+    // Fallback: if no sequence info, try to find stop index from currentStopId
+    let destIdx = -1;
+    if (seq >= 0 && seq < stops.length) {
+      destIdx = seq;
+    } else if (bus.currentStopId) {
+      destIdx = stops.findIndex(s => s.id === bus.currentStopId);
+      // Resolve child → parent route stop via lookup
+      if (destIdx < 0 && lookup?.resolveToRouteStop) {
+        const parent = lookup.resolveToRouteStop(bus.currentStopId);
+        if (parent) destIdx = stops.findIndex(s => s.id === parent.id);
+      }
     }
 
+    // If we know which stop the vehicle is at/heading to (destIdx)
     if (destIdx >= 0) {
-      if (bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT') {
-        return [{ bus, segmentIndex: destIdx, proportion: 0, stopIdx: destIdx }];
-      }
-      // IN_TRANSIT_TO / UNKNOWN: vehicle is between destIdx-1 and destIdx
-      if (destIdx > 0) {
-        const stop1 = stops[destIdx - 1];
-        const stop2 = stops[destIdx];
-        const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
-          ? calculatePositionProportion(
-              bus.latitude, bus.longitude,
-              stop1.latitude, stop1.longitude,
-              stop2.latitude, stop2.longitude,
-            )
-          : 0.5;
-        return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx - 1 }];
+      if (bus.currentStatus === 'IN_TRANSIT_TO') {
+        // Vehicle is between destIdx-1 and destIdx, heading to destIdx
+        if (destIdx > 0) {
+          const stop1 = stops[destIdx - 1];
+          const stop2 = stops[destIdx];
+          const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
+            ? calculatePositionProportion(
+                bus.latitude, bus.longitude,
+                stop1.latitude, stop1.longitude,
+                stop2.latitude, stop2.longitude,
+              )
+            : 0.5;
+          return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx - 1 }];
+        }
+      } else {
+        // STOPPED_AT or INCOMING_AT: vehicle is at destIdx
+        // For STOPPED_AT: show at the exact stop (proportion=0)
+        // For INCOMING_AT: show at the destination stop (stopIdx=destIdx),
+        //   but on the track segment (destIdx-1 to destIdx) for visual indication
+        if (bus.currentStatus === 'STOPPED_AT') {
+          return [{ bus, segmentIndex: destIdx, proportion: 0, stopIdx: destIdx }];
+        } else {
+          // INCOMING_AT: stopIdx points to destination for status lines,
+          // segmentIndex points to the segment leading to destination for track rendering
+          if (destIdx > 0) {
+            const stop1 = stops[destIdx - 1];
+            const stop2 = stops[destIdx];
+            const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
+              ? calculatePositionProportion(
+                  bus.latitude, bus.longitude,
+                  stop1.latitude, stop1.longitude,
+                  stop2.latitude, stop2.longitude,
+                )
+              : 0.5;
+            return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx }];
+          }
+          // If destIdx is 0, just show at the first stop
+          return [{ bus, segmentIndex: 0, proportion: 0, stopIdx: 0 }];
+        }
       }
     }
 
-    // Fallback: currentStopId is a child stop not in the route list — use GPS.
+    // Fallback: use GPS to find closest segment
     const seg = findBusSegment(bus, stops);
     if (!seg) return [];
     const { segmentIndex, proportion } = seg;

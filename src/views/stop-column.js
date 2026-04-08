@@ -11,8 +11,17 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
     if (!stop?.name) continue;
 
     const atStop = Object.values(segmentBuses).flat().filter(
-      p => (p.bus.currentStatus === 'STOPPED_AT' || p.bus.currentStatus === 'INCOMING_AT')
-        && p.stopIdx === i + globalOffset
+      p => p.bus.currentStatus === 'STOPPED_AT' && p.stopIdx === i + globalOffset
+    );
+
+    // INCOMING_AT buses: highlight the destination station (stopIdx)
+    const approachingAtStation = Object.values(segmentBuses).flat().filter(
+      p => p.bus.currentStatus === 'INCOMING_AT' && p.stopIdx === i + globalOffset
+    );
+
+    // Show INCOMING_AT progress markers on the track segment (segmentIndex)
+    const approachingOnTrack = (segmentBuses[i] ?? []).filter(
+      p => p.bus.currentStatus === 'INCOMING_AT'
     );
 
     const inTransit = (segmentBuses[i] ?? []).filter(
@@ -34,6 +43,11 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
       const color = colorMap.get(p.bus.id) || COLORS.active;
       marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
       nameColor = color;
+    } else if (approachingAtStation.length > 0) {
+      const p = approachingAtStation[0];
+      const color = colorMap.get(p.bus.id) || COLORS.active;
+      marker = `{${color}-fg}${busMarker(p.bus).char}{/${color}-fg}`;
+      nameColor = color;
     } else if (inTransit.length > 0) {
       const p = inTransit[0];
       const color = colorMap.get(p.bus.id) || COLORS.active;
@@ -50,6 +64,15 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
       const track = Array(trackWidth).fill('·');
       track[0] = '╎';
 
+      // Show approaching buses on the track segment (they are INCOMING_AT the next stop)
+      // Their progress is shown on segmentIndex, while their destination station is highlighted
+      approachingOnTrack.forEach(p => {
+        const pos = Math.max(1, Math.min(trackWidth - 2, Math.floor(p.proportion * (trackWidth - 2)) + 1));
+        const color = colorMap.get(p.bus.id) || COLORS.active;
+        track[pos] = { color, char: busMarker(p.bus).char };
+      });
+
+      // Show in-transit buses on this segment
       inTransit.forEach(p => {
         const pos = Math.max(1, Math.min(trackWidth - 2, Math.floor(p.proportion * (trackWidth - 2)) + 1));
         const color = colorMap.get(p.bus.id) || COLORS.active;

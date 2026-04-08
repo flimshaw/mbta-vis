@@ -4,7 +4,7 @@ import { THEME, OVERRIDE_THEME, getThemeByName } from './theme.js';
 const activeTheme = OVERRIDE_THEME ? getThemeByName(OVERRIDE_THEME) : THEME;
 
 // Timing
-export const AUTO_REFRESH_MS = 10000;
+export const AUTO_REFRESH_MS = 3000;
 export const MAX_RETRIES = 3;
 export const RETRY_DELAY_MS = 5000;
 
