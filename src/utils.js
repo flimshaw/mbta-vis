@@ -101,13 +101,20 @@ export function findBusSegment(bus, stops) {
  * Avoids mutating bus objects.
  * @param {Array} buses - Parsed bus objects
  * @param {Array} stops - Parsed stop objects
+ * @param {object|null} lookup - Optional stop lookup with resolveToRouteStop() method
  * @returns {Array} - [{ bus, segmentIndex, proportion, stopIdx }]
  */
-export function placeBuses(buses, stops) {
+export function placeBuses(buses, stops, lookup = null) {
   return buses.flatMap(bus => {
     // Prefer stop-ID-based placement: the API tells us exactly which stop the
     // vehicle is at or heading to, which is far more reliable than GPS nearest-segment.
-    const destIdx = stops.findIndex(s => s.id === bus.currentStopId);
+    let destIdx = stops.findIndex(s => s.id === bus.currentStopId);
+
+    // 2. Resolve child → parent route stop via lookup
+    if (destIdx < 0 && lookup?.resolveToRouteStop && bus.currentStopId) {
+      const parent = lookup.resolveToRouteStop(bus.currentStopId);
+      if (parent) destIdx = stops.findIndex(s => s.id === parent.id);
+    }
 
     if (destIdx >= 0) {
       if (bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT') {

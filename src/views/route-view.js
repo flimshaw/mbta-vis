@@ -77,7 +77,8 @@ export function createRouteView() {
 
     buses.forEach(b => busColor(b.id, colorMap));
 
-    const placed = placeBuses(buses, stops);
+    const lookup = createStopLookup(stops, extraStops);
+    const placed = placeBuses(buses, stops, lookup);
     const placedByVehicleId = Object.fromEntries(placed.map(p => [p.bus.id, p]));
     const placedIds = new Set(placed.map(p => p.bus.id));
     const unplaced = buses.filter(b => !placedIds.has(b.id));
@@ -104,7 +105,6 @@ export function createRouteView() {
 
     // Build stopName → earliest ETA string from predictions, for all vehicles
     const stopEtas = {};
-    const lookup = createStopLookup(stops, extraStops);
     for (const vehiclePreds of Object.values(predictions)) {
       for (const p of vehiclePreds) {
         const time = p.arrivalTime ?? p.departureTime;
@@ -127,7 +127,7 @@ export function createRouteView() {
 
     leftPane.setContent('\n ' + header + '\n' + stopLines.join('\n'));
 
-    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId);
+    updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId, lookup);
     screen.render();
   }
 
@@ -141,14 +141,14 @@ export function createRouteView() {
   return { box, update, scroll };
 }
 
-function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId) {
+function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, predictions, placedByVehicleId, lookup = null) {
   if (buses.length === 0) {
     rightPane.setContent(`{${COLORS.inactive}-fg}No vehicles{/${COLORS.inactive}-fg}`);
     return;
   }
 
-  const lookup = createStopLookup(stops, extraStops);
   const INNER = rightPane.width - 2; // inner width accounts for border
+  const finalLookup = lookup || createStopLookup(stops, extraStops);
 
   // Sort vehicles by their stop index so order matches the stop list top-to-bottom
   const sortedBuses = [...buses].sort((a, b) => {
@@ -164,7 +164,7 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, 
   const cards = sortedBuses.flatMap(bus => {
     const vehiclePreds = predictions[bus.id] ?? [];
     const placement = placedByVehicleId[bus.id] ?? null;
-    const cardLines = renderVehicleCard(bus, placement, colorMap, stops, lookup, vehiclePreds, INNER);
+    const cardLines = renderVehicleCard(bus, placement, colorMap, stops, finalLookup, vehiclePreds, INNER);
     return [...cardLines, divider];
   });
 
