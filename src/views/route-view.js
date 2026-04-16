@@ -47,6 +47,8 @@ export function createRouteView() {
         height: '30%',
         tags: true,
         border: { type: 'line' },
+        scrollable: true,
+        alwaysScroll: true,
         style: { border: { fg: COLORS.border }, bg: 'black' },
       });
       rightPane = blessed.box({
@@ -85,8 +87,8 @@ export function createRouteView() {
     box.append(leftPane);
     box.append(rightPane);
 
-    leftPane.on('wheelup',    () => scroll(-3));
-    leftPane.on('wheeldown',  () => scroll(3));
+    leftPane.on('wheelup',    () => { leftPane.scroll(-3); getScreen().render(); });
+    leftPane.on('wheeldown',  () => { leftPane.scroll(3);  getScreen().render(); });
     rightPane.on('wheelup',   () => { rightPane.scroll(-3); getScreen().render(); });
     rightPane.on('wheeldown', () => { rightPane.scroll(3);  getScreen().render(); });
   }
