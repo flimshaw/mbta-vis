@@ -78,12 +78,12 @@ export function vehicleStatusLabel(status) {
   }
 }
 
-export function miniCarIndicator(carriage) {
+export function miniCarIndicatorChar(carriage) {
   if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
-    return `{${COLORS.red}-fg}█{/${COLORS.red}-fg}`;
+    return '█';
   }
   if (!carriage.occupancyStatus || carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
-    return `{${COLORS.inactive}-fg}·{/${COLORS.inactive}-fg}`;
+    return '·';
   }
   const level = OCCUPANCY_LEVELS.find(l => l.status === carriage.occupancyStatus);
   // Map 5 levels to 8 quarter-block levels for more granular display
@@ -93,9 +93,21 @@ export function miniCarIndicator(carriage) {
     : carriage.occupancyPercentage != null
       ? Math.min(8, Math.round(carriage.occupancyPercentage / 12.5))
       : 0;
-  const color = level?.color ?? COLORS.inactive;
   const chars = ['·', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-  return `{${color}-fg}${chars[filled]}{/${color}-fg}`;
+  return chars[filled];
+}
+
+export function miniCarIndicator(carriage) {
+  const char = miniCarIndicatorChar(carriage);
+  if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
+    return `{${COLORS.red}-fg}${char}{/${COLORS.red}-fg}`;
+  }
+  if (!carriage.occupancyStatus || carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
+    return `{${COLORS.inactive}-fg}${char}{/${COLORS.inactive}-fg}`;
+  }
+  const level = OCCUPANCY_LEVELS.find(l => l.status === carriage.occupancyStatus);
+  const color = level?.color ?? COLORS.inactive;
+  return `{${color}-fg}${char}{/${color}-fg}`;
 }
 
 // Unified vehicle card renderer for buses and subway/rail vehicles.
@@ -126,7 +138,11 @@ export function renderVehicleCard(bus, placement, colorMap, stops, lookup, vehic
   const filteredLines = isStopped ? sLines.slice(1) : sLines;
 
   if (bus.carriages.length > 0) {
-    const carIndicators = bus.carriages.map(miniCarIndicator).join('');
+    const carIndicators = bus.carriages.map((c, i) => {
+      const char = miniCarIndicatorChar(c);
+      const indicator = miniCarIndicator(c).replace(/^{[^}]+}-fg}/, '').replace(/}{\/[^}]+}-fg$/, '');
+      return `{${COLORS.inactive}-fg}${i + 1}[${indicator}]{/${COLORS.inactive}-fg}`;
+    }).join(' ');
     const line2 = carIndicators || `{${COLORS.inactive}-fg}no car data{/${COLORS.inactive}-fg}`;
     return [line1, line2, ...filteredLines];
   }
