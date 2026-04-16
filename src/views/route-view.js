@@ -4,7 +4,7 @@ import { placeBuses, busColor } from '../utils.js';
 import { DIRECTION_LABELS, COLORS } from '../config.js';
 import { createStopLookup } from '../domain/stop-lookup.js';
 import { renderColumn } from './stop-column.js';
-import { occupancyBar, fmtEta, etaForStop, statusLines, vehicleStatusLabel, miniCarBar, renderVehicleCard, padBetween } from './vehicle-card.js';
+import { occupancyBar, fmtEta, etaForStop, statusLines, vehicleStatusLabel, miniCarIndicator, renderVehicleCard, padBetween } from './vehicle-card.js';
 
 /**
  * Create a route visualization view.

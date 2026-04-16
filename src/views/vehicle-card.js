@@ -78,24 +78,24 @@ export function vehicleStatusLabel(status) {
   }
 }
 
-export function miniCarBar(carriage) {
+export function miniCarIndicator(carriage) {
   if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
-    return `{${COLORS.red}-fg}[×××××]{/${COLORS.red}-fg}`;
+    return `{${COLORS.red}-fg}█{/${COLORS.red}-fg}`;
   }
   if (!carriage.occupancyStatus || carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
-    return `{${COLORS.inactive}-fg}[·····]{/${COLORS.inactive}-fg}`;
+    return `{${COLORS.inactive}-fg}·{/${COLORS.inactive}-fg}`;
   }
   const level = OCCUPANCY_LEVELS.find(l => l.status === carriage.occupancyStatus);
-  // Prefer status-based fill so color and fill are always consistent.
-  // Fall back to percentage only when status is absent or carries no fill info.
+  // Map 5 levels to 8 quarter-block levels for more granular display
+  const quarterLevels = [0, 2, 4, 5, 7, 8]; // indices into quarter-bar chars
   const filled = level
-    ? level.filled
+    ? quarterLevels[level.filled]
     : carriage.occupancyPercentage != null
-      ? Math.min(5, Math.round(carriage.occupancyPercentage / 20))
+      ? Math.min(8, Math.round(carriage.occupancyPercentage / 12.5))
       : 0;
   const color = level?.color ?? COLORS.inactive;
-  const bar = '█'.repeat(filled) + '·'.repeat(5 - filled);
-  return `{${color}-fg}[${bar}]{/${color}-fg}`;
+  const chars = ['·', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+  return `{${color}-fg}${chars[filled]}{/${color}-fg}`;
 }
 
 // Unified vehicle card renderer for buses and subway/rail vehicles.
@@ -126,8 +126,8 @@ export function renderVehicleCard(bus, placement, colorMap, stops, lookup, vehic
   const filteredLines = isStopped ? sLines.slice(1) : sLines;
 
   if (bus.carriages.length > 0) {
-    const carBars = bus.carriages.map((c, i) => `{${COLORS.inactive}-fg}${i + 1}{/${COLORS.inactive}-fg}${miniCarBar(c)}`).join(' ');
-    const line2 = carBars || `{${COLORS.inactive}-fg}no car data{/${COLORS.inactive}-fg}`;
+    const carIndicators = bus.carriages.map(miniCarIndicator).join('');
+    const line2 = carIndicators || `{${COLORS.inactive}-fg}no car data{/${COLORS.inactive}-fg}`;
     return [line1, line2, ...filteredLines];
   }
 
