@@ -1,6 +1,6 @@
 {
   "name": "mbta-vis",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Real-time terminal UI for tracking MBTA buses and subway trains",
   "type": "module",
   "main": "src/main.js",
