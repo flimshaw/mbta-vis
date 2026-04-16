@@ -133,10 +133,10 @@ export function placeBuses(buses, stops, lookup = null) {
           const stop2 = stops[destIdx];
           const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
             ? calculatePositionProportion(
-                bus.latitude, bus.longitude,
-                stop1.latitude, stop1.longitude,
-                stop2.latitude, stop2.longitude,
-              )
+              bus.latitude, bus.longitude,
+              stop1.latitude, stop1.longitude,
+              stop2.latitude, stop2.longitude,
+            )
             : 0.5;
           return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx - 1 }];
         }
@@ -155,10 +155,10 @@ export function placeBuses(buses, stops, lookup = null) {
             const stop2 = stops[destIdx];
             const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
               ? calculatePositionProportion(
-                  bus.latitude, bus.longitude,
-                  stop1.latitude, stop1.longitude,
-                  stop2.latitude, stop2.longitude,
-                )
+                bus.latitude, bus.longitude,
+                stop1.latitude, stop1.longitude,
+                stop2.latitude, stop2.longitude,
+              )
               : 0.5;
             return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx }];
           }
@@ -174,8 +174,8 @@ export function placeBuses(buses, stops, lookup = null) {
     const { segmentIndex, proportion } = seg;
     const stopIdx =
       bus.currentStatus === 'INCOMING_AT' ? segmentIndex + 1
-      : bus.currentStatus === 'STOPPED_AT' ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)
-      : segmentIndex;
+        : bus.currentStatus === 'STOPPED_AT' ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)
+          : segmentIndex;
     return [{ bus, segmentIndex, proportion, stopIdx }];
   });
 }
@@ -202,10 +202,10 @@ export function busColor(busId, colorMap) {
  */
 export function busMarker(bus) {
   switch (bus.currentStatus) {
-    case 'STOPPED_AT':    return { char: '■' };
-    case 'INCOMING_AT':   return { char: '▷' };
-    case 'IN_TRANSIT_TO': return { char: '▶' };
-    default:              return { char: '▶' };
+  case 'STOPPED_AT':    return { char: '■' };
+  case 'INCOMING_AT':   return { char: '▷' };
+  case 'IN_TRANSIT_TO': return { char: '▶' };
+  default:              return { char: '▶' };
   }
 }
 
@@ -216,14 +216,14 @@ export function busMarker(bus) {
  */
 export function formatOccupancy(status) {
   switch (status) {
-    case 'EMPTY':                       return 'Empty';
-    case 'MANY_SEATS_AVAILABLE':        return 'Many seats';
-    case 'FEW_SEATS_AVAILABLE':         return 'Few seats';
-    case 'STANDING_ROOM_ONLY':          return 'Standing only';
-    case 'CRUSHED_STANDING_ROOM_ONLY':  return 'Crushed';
-    case 'FULL':                        return 'Full';
-    case 'NOT_ACCEPTING_PASSENGERS':    return 'Not boarding';
-    default:                            return 'Unknown';
+  case 'EMPTY':                       return 'Empty';
+  case 'MANY_SEATS_AVAILABLE':        return 'Many seats';
+  case 'FEW_SEATS_AVAILABLE':         return 'Few seats';
+  case 'STANDING_ROOM_ONLY':          return 'Standing only';
+  case 'CRUSHED_STANDING_ROOM_ONLY':  return 'Crushed';
+  case 'FULL':                        return 'Full';
+  case 'NOT_ACCEPTING_PASSENGERS':    return 'Not boarding';
+  default:                            return 'Unknown';
   }
 }
 

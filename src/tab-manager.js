@@ -1,6 +1,7 @@
 import { fetchRouteVehicles, fetchRouteStops, fetchStopsByIds, fetchRoutePredictions, parseVehicle, parseStop } from './mbta-api.js';
 import { AUTO_REFRESH_MS, MAX_RETRIES, RETRY_DELAY_MS, DIRECTION_LABELS, DEFAULT_DIRECTION } from './config.js';
 import { groupPredictions, resolveUnknownStopIds, cacheKey } from './domain/route-data.js';
+import { clearTimeout, setTimeout } from 'node:timers';
 
 /**
  * Create a tab manager that owns all tab state and lifecycle.
