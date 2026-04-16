@@ -1,8 +1,11 @@
 import { busMarker } from '../utils.js';
 import { COLORS } from '../config.js';
 
-export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}) {
-  const LABEL_WIDTH = Math.floor(innerWidth / 2) - 2;
+export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}, isPortrait = false) {
+  // In portrait mode (narrow screens), use 80/20 split (label/track)
+  // In landscape mode, use 50/50 split
+  const labelRatio = isPortrait ? 0.80 : 0.50;
+  const LABEL_WIDTH = Math.floor(innerWidth * labelRatio) - 2;
   const trackWidth = Math.max(4, innerWidth - LABEL_WIDTH - 3);
   const lines = [];
 
