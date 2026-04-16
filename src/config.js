@@ -12,8 +12,7 @@ export const RETRY_DELAY_MS = 5000;
 export const DEFAULT_ROUTE = '87';
 export const DEFAULT_DIRECTION = 0;
 
-// Layout
-export const RIGHT_WIDTH = 68;
+
 
 // Direction labels indexed by directionId (0 = Outbound, 1 = Inbound)
 export const DIRECTION_LABELS = ['Outbound', 'Inbound'];

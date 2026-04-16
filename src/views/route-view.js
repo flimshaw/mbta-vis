@@ -1,10 +1,10 @@
 import blessed from 'blessed';
 import { getScreen } from '../screen.js';
 import { placeBuses, busColor } from '../utils.js';
-import { RIGHT_WIDTH, DIRECTION_LABELS, COLORS } from '../config.js';
+import { DIRECTION_LABELS, COLORS } from '../config.js';
 import { createStopLookup } from '../domain/stop-lookup.js';
 import { renderColumn } from './stop-column.js';
-import { occupancyBar, fmtEta, etaForStop, statusLines, vehicleStatusLabel, miniCarBar, renderVehicleCard, padBetween } from './vehicle-card.js';
+import { occupancyBar, fmtEta, etaForStop, statusLines, vehicleStatusLabel, miniCarIndicator, renderVehicleCard, padBetween } from './vehicle-card.js';
 
 /**
  * Create a route visualization view.
@@ -29,36 +29,89 @@ export function createRouteView() {
   let lastPageSize = 1;
   let lastUpdateArgs = null;
 
-  // Left pane: stop list. Right pane: vehicle info. Both are persistent.
-  const leftPane = blessed.box({
-    top: 0, left: 0,
-    width: `100%-${RIGHT_WIDTH}`,
-    height: '100%',
-    tags: true,
-    border: { type: 'line' },
-    style: { border: { fg: COLORS.border }, bg: 'black' },
-  });
-  const rightPane = blessed.box({
-    top: 0, right: 0,
-    width: RIGHT_WIDTH,
-    height: '100%',
-    tags: true,
-    border: { type: 'line' },
-    label: ' Vehicles ',
-    scrollable: true,
-    alwaysScroll: true,
-    style: { border: { fg: COLORS.border }, bg: 'black' },
-  });
-  box.append(leftPane);
-  box.append(rightPane);
+  // Layout state - will be re-initialized on resize if orientation changes
+  let isPortrait = false;
+  let leftPane;
+  let rightPane;
 
-  leftPane.on('wheelup',    () => scroll(-3));
-  leftPane.on('wheeldown',  () => scroll(3));
-  rightPane.on('wheelup',   () => { rightPane.scroll(-3); getScreen().render(); });
-  rightPane.on('wheeldown', () => { rightPane.scroll(3);  getScreen().render(); });
+  function createPanes() {
+    // Remove existing panes if they exist
+    if (leftPane) leftPane.destroy();
+    if (rightPane) rightPane.destroy();
+
+    if (isPortrait) {
+      // Stacked layout: 30% top (stops), 70% bottom (vehicles)
+      leftPane = blessed.box({
+        top: 0, left: 0,
+        width: '100%',
+        height: '30%',
+        tags: true,
+        border: { type: 'line' },
+        scrollable: true,
+        alwaysScroll: true,
+        style: { border: { fg: COLORS.border }, bg: 'black' },
+      });
+      rightPane = blessed.box({
+        top: '30%', left: 0,
+        width: '100%',
+        height: '70%',
+        tags: true,
+        border: { type: 'line' },
+        label: ' Vehicles ',
+        scrollable: true,
+        alwaysScroll: true,
+        style: { border: { fg: COLORS.border }, bg: 'black' },
+      });
+    } else {
+      // Landscape layout: 50% left (stops), 50% right (vehicles)
+      leftPane = blessed.box({
+        top: 0, left: 0,
+        width: '50%',
+        height: '100%',
+        tags: true,
+        border: { type: 'line' },
+        style: { border: { fg: COLORS.border }, bg: 'black' },
+      });
+      rightPane = blessed.box({
+        top: 0, right: 0,
+        width: '50%',
+        height: '100%',
+        tags: true,
+        border: { type: 'line' },
+        label: ' Vehicles ',
+        scrollable: true,
+        alwaysScroll: true,
+        style: { border: { fg: COLORS.border }, bg: 'black' },
+      });
+    }
+    box.append(leftPane);
+    box.append(rightPane);
+
+    leftPane.on('wheelup',    () => { leftPane.scroll(-3); getScreen().render(); });
+    leftPane.on('wheeldown',  () => { leftPane.scroll(3);  getScreen().render(); });
+    rightPane.on('wheelup',   () => { rightPane.scroll(-3); getScreen().render(); });
+    rightPane.on('wheeldown', () => { rightPane.scroll(3);  getScreen().render(); });
+  }
 
   // Re-render on terminal resize using the last known data
-  getScreen().on('resize', () => { if (lastUpdateArgs) update(...lastUpdateArgs); });
+  getScreen().on('resize', () => {
+    const screen = getScreen();
+    const thresholdWidth = 80;
+    const shouldBePortrait = screen.width < thresholdWidth;
+    
+    if (isPortrait !== shouldBePortrait) {
+      isPortrait = shouldBePortrait;
+      createPanes();
+      if (lastUpdateArgs) update(...lastUpdateArgs);
+    } else {
+      if (lastUpdateArgs) update(...lastUpdateArgs);
+    }
+  });
+
+  // Initialize panes based on initial screen size
+  const initialScreen = getScreen();
+  isPortrait = initialScreen.width < 80;
+  createPanes();
 
   function update(buses, stops, extraStops, directionId, routeNumber = '87', predictions = {}) {
     lastUpdateArgs = [buses, stops, extraStops, directionId, routeNumber, predictions];
@@ -67,6 +120,9 @@ export function createRouteView() {
 
     // Left pane inner width (subtract 2 for border)
     const leftInnerWidth = leftPane.width - 2;
+
+    // In portrait mode, use 80/20 split (label/track) for narrow screens
+    // In landscape mode, use 50/50 split
 
     // Compute visible stop window for scrolling
     const pageSize = contentHeight - 4; // rows available inside left pane (border + header)
