@@ -177,7 +177,7 @@ export function createRouteView() {
     const hasMoreStops = (scrollOffset + pageSize) < stops.length;
     const stopLines = buses.length === 0
       ? ['{yellow-fg}No active vehicles.{/yellow-fg}']
-      : renderColumn(visibleStops, localSegBuses, leftInnerWidth, hasMoreStops, colorMap, scrollOffset, stopEtas, isPortrait);
+      : renderColumn(visibleStops, localSegBuses, leftInnerWidth, hasMoreStops, colorMap, scrollOffset, stopEtas);
 
     leftPane.setContent('\n ' + header + '\n' + stopLines.join('\n'));
 
