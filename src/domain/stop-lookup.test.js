@@ -37,4 +37,43 @@ describe('createStopLookup', () => {
     const lookup = createStopLookup([], []);
     assert.strictEqual(lookup('place-central'), undefined);
   });
+
+  it('should resolve child stop to parent route stop', () => {
+    const routeStops = [{ id: 'place-central', name: 'Central' }];
+    const extraStops = [
+      { id: 'place-central-1', name: 'Platform 1', parentStationId: 'place-central' },
+    ];
+    const lookup = createStopLookup(routeStops, extraStops);
+    assert.deepStrictEqual(lookup.resolveToRouteStop('place-central-1'),
+                           { id: 'place-central', name: 'Central' });
+  });
+
+  it('should handle multi-level parent chain', () => {
+    const routeStops = [{ id: 'place-central', name: 'Central' }];
+    const extraStops = [
+      { id: 'place-central-1', name: 'Platform 1', parentStationId: 'place-central-2' },
+      { id: 'place-central-2', name: 'Mezzanine', parentStationId: 'place-central' },
+    ];
+    const lookup = createStopLookup(routeStops, extraStops);
+    assert.deepStrictEqual(lookup.resolveToRouteStop('place-central-1'),
+                           { id: 'place-central', name: 'Central' });
+  });
+
+  it('should return null when parent chain does not reach route stop', () => {
+    const routeStops = [{ id: 'place-central', name: 'Central' }];
+    const extraStops = [
+      { id: 'place-central-1', name: 'Platform 1', parentStationId: 'place-unknown' },
+    ];
+    const lookup = createStopLookup(routeStops, extraStops);
+    assert.strictEqual(lookup.resolveToRouteStop('place-central-1'), null);
+  });
+
+  it('should return null when stop has no parentStationId', () => {
+    const routeStops = [{ id: 'place-central', name: 'Central' }];
+    const extraStops = [
+      { id: 'place-central-1', name: 'Platform 1' }, // no parentStationId
+    ];
+    const lookup = createStopLookup(routeStops, extraStops);
+    assert.strictEqual(lookup.resolveToRouteStop('place-central-1'), null);
+  });
 });
