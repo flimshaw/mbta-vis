@@ -1,6 +1,7 @@
 import { fetchRouteVehicles, fetchRouteStops, fetchStopsByIds, fetchRoutePredictions, parseVehicle, parseStop } from './mbta-api.js';
 import { AUTO_REFRESH_MS, MAX_RETRIES, RETRY_DELAY_MS, DIRECTION_LABELS, DEFAULT_DIRECTION } from './config.js';
 import { groupPredictions, resolveUnknownStopIds, cacheKey } from './domain/route-data.js';
+import { clearTimeout, setTimeout } from 'node:timers';
 
 /**
  * Create a tab manager that owns all tab state and lifecycle.
@@ -25,13 +26,10 @@ export function createTabManager({ createView, addTab, updateTabLabel, setStatus
     return tabStates[activeTabIdx];
   }
 
-  /** Format tab label: use route name if available (subway), otherwise show "Route X" (bus). */
-  function formatTabLabel(routeId) {
+  /** Format route label: use route name if available, otherwise show "Route X". */
+  function formatRoute(routeId) {
     const routeName = getRouteName(routeId);
-    if (routeName) {
-      return routeName;
-    }
-    return `Route ${routeId}`;
+    return routeName || `Route ${routeId}`;
   }
 
   async function getStops(tab, route, direction) {
@@ -46,7 +44,7 @@ export function createTabManager({ createView, addTab, updateTabLabel, setStatus
 
   async function refreshAndDisplay(tab) {
     const isActive = tab === activeTab();
-    if (isActive) setStatus(`{yellow-fg}Fetching Route ${tab.route}...{/yellow-fg}`);
+    if (isActive) setStatus(`{yellow-fg}Fetching ${formatRoute(tab.route)}...{/yellow-fg}`);
 
     try {
       const [vehicles, stops, rawPredictions] = await fetchWithRetry(() =>
@@ -112,7 +110,7 @@ export function createTabManager({ createView, addTab, updateTabLabel, setStatus
     /** Create a new tab for the given route and direction, and start fetching. */
     create(routeId, direction) {
       const view = createView();
-      const tabIndex = addTab(formatTabLabel(routeId), view);
+      const tabIndex = addTab(formatRoute(routeId), view);
       const tab = {
         tabIndex,
         route: routeId,
@@ -135,7 +133,7 @@ export function createTabManager({ createView, addTab, updateTabLabel, setStatus
     switchRoute(routeId) {
       const tab = activeTab();
       tab.route = routeId;
-      updateTabLabel(tab.tabIndex, formatTabLabel(routeId));
+      updateTabLabel(tab.tabIndex, formatRoute(routeId));
       cancelTimers(tab);
       refreshAndDisplay(tab);
     },

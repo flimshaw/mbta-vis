@@ -154,24 +154,6 @@ export function formatColor(colorName, suffix = '-fg') {
   return `{${colorName}${suffix}}`;
 }
 
-/**
- * Get a vehicle color from the theme palette.
- * @param {string} busId - Bus/vehicle ID
- * @param {object} theme - Theme object
- * @returns {string} Color string for blessed
- */
-export function getVehicleColor(busId, theme) {
-  // Use hash of bus ID to select consistent color
-  let hash = 0;
-  for (let i = 0; i < busId.length; i++) {
-    hash = ((hash << 5) - hash) + busId.charCodeAt(i);
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  hash = Math.abs(hash);
-  const index = hash % theme.palette.length;
-  return theme.palette[index];
-}
-
 // Export current theme on module load
 const currentTheme = detectTheme();
 

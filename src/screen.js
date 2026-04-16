@@ -14,7 +14,6 @@ let onDirectionToggleCb = null;
 let onNewTabCb = null;
 let onTabSwitchCb = null;
 let onScrollCb = null;
-let onGetRouteNameCb = null;
 
 /**
  * Initialize the blessed screen. Call once at startup.
@@ -179,33 +178,20 @@ export function onScroll(callback) {
   onScrollCb = callback;
 }
 
-export function onGetRouteName(callback) {
-  onGetRouteNameCb = callback;
-}
-
 /**
- * Build a map of routeId -> routeName from cachedModes.
- * @returns {Map<string, string>} - Map of route ID to route name
+ * Look up a route name from the cached route list.
+ * @param {string} routeId
+ * @returns {string|null}
  */
-function buildRouteNameMap() {
-  const map = new Map();
+export function getRouteName(routeId) {
   for (const mode of cachedModes) {
     for (const route of mode.routes) {
-      if (route.id && route.name) {
-        map.set(route.id, route.name);
+      if (route.id === routeId && route.name) {
+        return route.name;
       }
     }
   }
-  return map;
-}
-
-export function getRouteName(routeId) {
-  if (onGetRouteNameCb) {
-    return onGetRouteNameCb(routeId);
-  }
-  // Build map and look up route name
-  const map = buildRouteNameMap();
-  return map.get(routeId) || null;
+  return null;
 }
 
 export function openRouteSelector() {

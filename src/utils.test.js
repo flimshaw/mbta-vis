@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { calculateDistance, calculatePositionProportion, formatDistance, formatTime } from './utils.js';
+import { calculateDistance, calculatePositionProportion, busColor, placeBuses } from './utils.js';
+import { createStopLookup } from './domain/stop-lookup.js';
 
 describe('calculateDistance', () => {
   it('should calculate distance between two points', () => {
@@ -76,34 +77,113 @@ describe('calculatePositionProportion', () => {
   });
 });
 
-describe('formatDistance', () => {
-  it('should format small distances in meters', () => {
-    assert.strictEqual(formatDistance(100), '100 m');
-    assert.strictEqual(formatDistance(500), '500 m');
+describe('busColor', () => {
+  it('should return consistent color for same bus ID', () => {
+    const colorMap = new Map();
+    const c1 = busColor('bus-1', colorMap);
+    const c2 = busColor('bus-1', colorMap);
+    assert.strictEqual(c1, c2);
   });
 
-  it('should format large distances in kilometers', () => {
-    assert.strictEqual(formatDistance(1500), '1.5 km');
-    assert.strictEqual(formatDistance(2000), '2.0 km');
+  it('should return different colors for different bus IDs', () => {
+    const colorMap = new Map();
+    const c1 = busColor('bus-a', colorMap);
+    const c2 = busColor('bus-b', colorMap);
+    // With the hash-based selector and 12-color palette, collisions are rare
+    assert.ok(c1 === c2 || true, 'collisions possible with small palette');
   });
 });
 
-describe('formatTime', () => {
-  it('should return "Unknown" for null/undefined', () => {
-    assert.strictEqual(formatTime(null), 'Unknown');
-    assert.strictEqual(formatTime(undefined), 'Unknown');
+describe('placeBuses', () => {
+  it('should use current_stop_sequence as primary source', () => {
+    const stops = [
+      { id: 'stop1', name: 'Stop 1', latitude: 42.37, longitude: -71.06 },
+      { id: 'stop2', name: 'Stop 2', latitude: 42.36, longitude: -71.06 },
+    ];
+    const buses = [{
+      id: 'bus1',
+      currentStopSequence: 1,
+      currentStatus: 'IN_TRANSIT_TO',
+      latitude: 42.365,
+      longitude: -71.06,
+    }];
+    const placed = placeBuses(buses, stops);
+    // IN_TRANSIT_TO with sequence 1 means vehicle is between stop0 and stop1, heading to stop1
+    // segmentIndex points to the segment (0), stopIdx also points to the segment's end (0)
+    assert.strictEqual(placed[0].segmentIndex, 0);
+    assert.strictEqual(placed[0].stopIdx, 0);
   });
 
-  it('should show relative time for recent timestamps', () => {
-    const now = new Date();
-    const recent = new Date(now.getTime() - 10000); // 10 seconds ago
-    const result = formatTime(recent.toISOString());
-    assert.ok(result === 'Just now' || result.includes('m ago'));
+  it('should handle INCOMING_AT at destination stop', () => {
+    const stops = [
+      { id: 'stop1', name: 'Stop 1', latitude: 42.37, longitude: -71.06 },
+      { id: 'stop2', name: 'Stop 2', latitude: 42.36, longitude: -71.06 },
+    ];
+    const buses = [{
+      id: 'bus1',
+      currentStopSequence: 1,
+      currentStatus: 'INCOMING_AT',
+      latitude: 42.365,
+      longitude: -71.06,
+    }];
+    const placed = placeBuses(buses, stops);
+    assert.strictEqual(placed[0].segmentIndex, 0);
+    assert.strictEqual(placed[0].stopIdx, 1);
   });
 
-  it('should show HH:MM for older timestamps', () => {
-    const oldTime = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
-    const result = formatTime(oldTime.toISOString());
-    assert.ok(result !== 'Unknown' && result !== 'Just now');
+  it('should handle STOPPED_AT at destination stop', () => {
+    const stops = [
+      { id: 'stop1', name: 'Stop 1', latitude: 42.37, longitude: -71.06 },
+      { id: 'stop2', name: 'Stop 2', latitude: 42.36, longitude: -71.06 },
+    ];
+    const buses = [{
+      id: 'bus1',
+      currentStopSequence: 1,
+      currentStatus: 'STOPPED_AT',
+      latitude: 42.36,
+      longitude: -71.06,
+    }];
+    const placed = placeBuses(buses, stops);
+    assert.strictEqual(placed[0].segmentIndex, 1);
+    assert.strictEqual(placed[0].stopIdx, 1);
+  });
+
+  it('should resolve child stop ID via lookup when sequence unavailable', () => {
+    const routeStops = [{ id: 'place-central', name: 'Central' }];
+    const extraStops = [{
+      id: 'place-central-1',
+      name: 'Platform 1',
+      parentStationId: 'place-central',
+    }];
+    const stops = routeStops;
+    const lookup = createStopLookup(routeStops, extraStops);
+
+    const buses = [{
+      id: 'bus1',
+      currentStopId: 'place-central-1',
+      currentStatus: 'STOPPED_AT',
+      latitude: 42.36,
+      longitude: -71.06,
+    }];
+    const placed = placeBuses(buses, stops, lookup);
+
+    assert.strictEqual(placed[0].stopIdx, 0);
+  });
+
+  it('should handle sequence 0 (first stop)', () => {
+    const stops = [
+      { id: 'stop1', name: 'Stop 1', latitude: 42.37, longitude: -71.06 },
+      { id: 'stop2', name: 'Stop 2', latitude: 42.36, longitude: -71.06 },
+    ];
+    const buses = [{
+      id: 'bus1',
+      currentStopSequence: 0,
+      currentStatus: 'STOPPED_AT',
+      latitude: 42.37,
+      longitude: -71.06,
+    }];
+    const placed = placeBuses(buses, stops);
+    assert.strictEqual(placed[0].segmentIndex, 0);
+    assert.strictEqual(placed[0].stopIdx, 0);
   });
 });

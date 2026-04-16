@@ -71,10 +71,10 @@ export function statusLines(bus, placement, stops, lookup, vehiclePreds, INNER) 
 
 export function vehicleStatusLabel(status) {
   switch (status) {
-    case 'STOPPED_AT':    return `{${COLORS.yellow}-fg}stopped{/${COLORS.yellow}-fg}`;
-    case 'INCOMING_AT':   return `{${COLORS.cyan}-fg}arriving{/${COLORS.cyan}-fg}`;
-    case 'IN_TRANSIT_TO': return `{${COLORS.green}-fg}moving{/${COLORS.green}-fg}`;
-    default:              return null;
+  case 'STOPPED_AT':    return `{${COLORS.yellow}-fg}stopped{/${COLORS.yellow}-fg}`;
+  case 'INCOMING_AT':   return `{${COLORS.cyan}-fg}arriving{/${COLORS.cyan}-fg}`;
+  case 'IN_TRANSIT_TO': return `{${COLORS.green}-fg}moving{/${COLORS.green}-fg}`;
+  default:              return null;
   }
 }
 

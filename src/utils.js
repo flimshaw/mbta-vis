@@ -59,18 +59,6 @@ export function calculatePositionProportion(busLat, busLon, stop1Lat, stop1Lon, 
 }
 
 /**
- * Format distance for display
- * @param {number} meters - Distance in meters
- * @returns {string} - Formatted distance string
- */
-export function formatDistance(meters) {
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(1)} km`;
-  }
-  return `${Math.round(meters)} m`;
-}
-
-/**
  * Find which segment a bus belongs to (closest segment by distance)
  * @param {object} bus - Parsed bus object with latitude/longitude
  * @param {Array} stops - Array of parsed stop objects
@@ -111,43 +99,83 @@ export function findBusSegment(bus, stops) {
 /**
  * Place all buses onto their segments, returning clean placement objects.
  * Avoids mutating bus objects.
+ * Uses current_stop_sequence to determine which segment, GPS for proportion.
  * @param {Array} buses - Parsed bus objects
  * @param {Array} stops - Parsed stop objects
+ * @param {object|null} lookup - Optional stop lookup with resolveToRouteStop() method
  * @returns {Array} - [{ bus, segmentIndex, proportion, stopIdx }]
  */
-export function placeBuses(buses, stops) {
+export function placeBuses(buses, stops, lookup = null) {
   return buses.flatMap(bus => {
-    // Prefer stop-ID-based placement: the API tells us exactly which stop the
-    // vehicle is at or heading to, which is far more reliable than GPS nearest-segment.
-    const destIdx = stops.findIndex(s => s.id === bus.currentStopId);
+    // Use current_stop_sequence as the source of truth for which stop the vehicle is at.
+    // This is more reliable than currentStopId (which can be a child stop) or GPS.
+    const seq = bus.currentStopSequence;
 
-    if (destIdx >= 0) {
-      if (bus.currentStatus === 'STOPPED_AT' || bus.currentStatus === 'INCOMING_AT') {
-        return [{ bus, segmentIndex: destIdx, proportion: 0, stopIdx: destIdx }];
+    // Fallback: if no sequence info, try to find stop index from currentStopId
+    let destIdx = -1;
+    if (seq >= 0 && seq < stops.length) {
+      destIdx = seq;
+    } else if (bus.currentStopId) {
+      destIdx = stops.findIndex(s => s.id === bus.currentStopId);
+      // Resolve child → parent route stop via lookup
+      if (destIdx < 0 && lookup?.resolveToRouteStop) {
+        const parent = lookup.resolveToRouteStop(bus.currentStopId);
+        if (parent) destIdx = stops.findIndex(s => s.id === parent.id);
       }
-      // IN_TRANSIT_TO / UNKNOWN: vehicle is between destIdx-1 and destIdx
-      if (destIdx > 0) {
-        const stop1 = stops[destIdx - 1];
-        const stop2 = stops[destIdx];
-        const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
-          ? calculatePositionProportion(
+    }
+
+    // If we know which stop the vehicle is at/heading to (destIdx)
+    if (destIdx >= 0) {
+      if (bus.currentStatus === 'IN_TRANSIT_TO') {
+        // Vehicle is between destIdx-1 and destIdx, heading to destIdx
+        if (destIdx > 0) {
+          const stop1 = stops[destIdx - 1];
+          const stop2 = stops[destIdx];
+          const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
+            ? calculatePositionProportion(
               bus.latitude, bus.longitude,
               stop1.latitude, stop1.longitude,
               stop2.latitude, stop2.longitude,
             )
-          : 0.5;
-        return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx - 1 }];
+            : 0.5;
+          return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx - 1 }];
+        }
+      } else {
+        // STOPPED_AT or INCOMING_AT: vehicle is at destIdx
+        // For STOPPED_AT: show at the exact stop (proportion=0)
+        // For INCOMING_AT: show at the destination stop (stopIdx=destIdx),
+        //   but on the track segment (destIdx-1 to destIdx) for visual indication
+        if (bus.currentStatus === 'STOPPED_AT') {
+          return [{ bus, segmentIndex: destIdx, proportion: 0, stopIdx: destIdx }];
+        } else {
+          // INCOMING_AT: stopIdx points to destination for status lines,
+          // segmentIndex points to the segment leading to destination for track rendering
+          if (destIdx > 0) {
+            const stop1 = stops[destIdx - 1];
+            const stop2 = stops[destIdx];
+            const proportion = (stop1?.latitude && stop2?.latitude && bus.latitude != null)
+              ? calculatePositionProportion(
+                bus.latitude, bus.longitude,
+                stop1.latitude, stop1.longitude,
+                stop2.latitude, stop2.longitude,
+              )
+              : 0.5;
+            return [{ bus, segmentIndex: destIdx - 1, proportion, stopIdx: destIdx }];
+          }
+          // If destIdx is 0, just show at the first stop
+          return [{ bus, segmentIndex: 0, proportion: 0, stopIdx: 0 }];
+        }
       }
     }
 
-    // Fallback: currentStopId is a child stop not in the route list — use GPS.
+    // Fallback: use GPS to find closest segment
     const seg = findBusSegment(bus, stops);
     if (!seg) return [];
     const { segmentIndex, proportion } = seg;
     const stopIdx =
       bus.currentStatus === 'INCOMING_AT' ? segmentIndex + 1
-      : bus.currentStatus === 'STOPPED_AT' ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)
-      : segmentIndex;
+        : bus.currentStatus === 'STOPPED_AT' ? (proportion > 0.5 ? segmentIndex + 1 : segmentIndex)
+          : segmentIndex;
     return [{ bus, segmentIndex, proportion, stopIdx }];
   });
 }
@@ -174,10 +202,10 @@ export function busColor(busId, colorMap) {
  */
 export function busMarker(bus) {
   switch (bus.currentStatus) {
-    case 'STOPPED_AT':    return { char: '■' };
-    case 'INCOMING_AT':   return { char: '▷' };
-    case 'IN_TRANSIT_TO': return { char: '▶' };
-    default:              return { char: '▶' };
+  case 'STOPPED_AT':    return { char: '■' };
+  case 'INCOMING_AT':   return { char: '▷' };
+  case 'IN_TRANSIT_TO': return { char: '▶' };
+  default:              return { char: '▶' };
   }
 }
 
@@ -188,40 +216,15 @@ export function busMarker(bus) {
  */
 export function formatOccupancy(status) {
   switch (status) {
-    case 'EMPTY':                       return 'Empty';
-    case 'MANY_SEATS_AVAILABLE':        return 'Many seats';
-    case 'FEW_SEATS_AVAILABLE':         return 'Few seats';
-    case 'STANDING_ROOM_ONLY':          return 'Standing only';
-    case 'CRUSHED_STANDING_ROOM_ONLY':  return 'Crushed';
-    case 'FULL':                        return 'Full';
-    case 'NOT_ACCEPTING_PASSENGERS':    return 'Not boarding';
-    default:                            return 'Unknown';
+  case 'EMPTY':                       return 'Empty';
+  case 'MANY_SEATS_AVAILABLE':        return 'Many seats';
+  case 'FEW_SEATS_AVAILABLE':         return 'Few seats';
+  case 'STANDING_ROOM_ONLY':          return 'Standing only';
+  case 'CRUSHED_STANDING_ROOM_ONLY':  return 'Crushed';
+  case 'FULL':                        return 'Full';
+  case 'NOT_ACCEPTING_PASSENGERS':    return 'Not boarding';
+  default:                            return 'Unknown';
   }
 }
 
-/**
- * Format time for display
- * @param {string} isoString - ISO 8601 timestamp
- * @returns {string} - Formatted time string
- */
-export function formatTime(isoString) {
-  if (!isoString) return 'Unknown';
-  
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now - date;
-  
-  // If within 5 minutes, show "Just now"
-  if (diffMs < 5 * 60 * 1000) {
-    return 'Just now';
-  }
-  
-  // If within 1 hour, show minutes ago
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  }
-  
-  // Otherwise show HH:MM
-  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-}
+

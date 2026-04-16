@@ -174,5 +174,6 @@ export function parseStop(stop) {
     platformName: attrs.platform_name || null,
     latitude: attrs.latitude,
     longitude: attrs.longitude,
+    parentStationId: stop.relationships?.parent_station?.data?.id ?? null,
   };
 }
