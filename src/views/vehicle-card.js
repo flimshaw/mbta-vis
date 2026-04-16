@@ -82,8 +82,11 @@ export function miniCarIndicatorChar(carriage) {
   if (carriage.occupancyStatus === 'NOT_ACCEPTING_PASSENGERS') {
     return '█';
   }
-  if (!carriage.occupancyStatus || carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
+  if (carriage.occupancyStatus === 'NO_DATA_AVAILABLE') {
     return '·';
+  }
+  if (carriage.occupancyStatus === 'EMPTY') {
+    return ' '; // empty bar - no fill at all
   }
   const level = OCCUPANCY_LEVELS.find(l => l.status === carriage.occupancyStatus);
   // Map 5 levels to 8 quarter-block levels for more granular display
