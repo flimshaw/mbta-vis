@@ -2,6 +2,7 @@ import blessed from 'blessed';
 import { showRouteSelector } from './overlays/route-selector.js';
 import { showHelp } from './overlays/help.js';
 import { COLORS } from './config.js';
+import { CHARSETS } from './theme.js';
 
 let screen = null;
 let tabBar = null;
@@ -48,6 +49,7 @@ export function initScreen() {
   });
 
   tabBar.on('mousedown', (data) => {
+    const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
     let pos = 0;
     for (let i = 0; i < tabs.length; i++) {
       const tabWidth = tabs[i].label.length + 2; // " label "
@@ -55,7 +57,7 @@ export function initScreen() {
         setActiveTab(i);
         return;
       }
-      pos += tabWidth + 1; // +1 for │ separator
+      pos += tabWidth + 1; // +1 for separator
     }
   });
 
@@ -128,12 +130,14 @@ export function updateTabLabel(index, label) {
 }
 
 function renderTabBar() {
+  const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
+  const separator = cs.separator;
   const parts = tabs.map((t, i) =>
     i === activeTabIndex
       ? `{${COLORS.activeBg}-bg}{${COLORS.active}-fg} ${t.label} {/${COLORS.active}-fg}{/${COLORS.activeBg}-bg}`
       : `{${COLORS.inactive}-fg} ${t.label} {/${COLORS.inactive}-fg}`
   );
-  tabBar.setContent(parts.join(`{${COLORS.inactive}-fg}│{/${COLORS.inactive}-fg}`));
+  tabBar.setContent(parts.join(`{${COLORS.inactive}-fg}${separator}{/${COLORS.inactive}-fg}`));
 }
 
 /**

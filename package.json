@@ -18,7 +18,7 @@
   },
   "scripts": {
     "start": "node bin/mbta-vis.js",
-    "test": "node --test src/**/*.test.js",
+    "test": "TERM=xterm-256color node --test src/**/*.test.js",
     "lint": "eslint src/"
   },
   "keywords": [

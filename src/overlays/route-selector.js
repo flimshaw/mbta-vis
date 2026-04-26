@@ -1,5 +1,6 @@
 import blessed from 'blessed';
 import { COLORS } from '../config.js';
+import { CHARSETS } from '../theme.js';
 
 let overlay = null;
 
@@ -11,9 +12,10 @@ export function showRouteSelector(screen, cachedModes, onSelect) {
     return;
   }
 
+  const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
   const modes = cachedModes.length > 0
     ? cachedModes
-    : [{ label: 'Routes', routes: [{ id: '…', name: 'Loading routes…' }] }];
+    : [{ label: 'Routes', routes: [{ id: cs.ellipsis, name: `Loading routes${cs.ellipsis}` }] }];
 
   let activeModeIdx = 0;
   const currentRoutes = () => modes[activeModeIdx].routes;
@@ -77,7 +79,7 @@ export function showRouteSelector(screen, cachedModes, onSelect) {
   });
   overlay.key(['enter', 'return'], () => {
     const route = currentRoutes()[overlay.selected];
-    if (!route || route.id === '…') return;
+    if (!route || route.id === cs.ellipsis) return;
     close();
     if (onSelect) onSelect(route.id);
   });

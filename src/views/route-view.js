@@ -2,6 +2,7 @@ import blessed from 'blessed';
 import { getScreen } from '../screen.js';
 import { placeBuses, busColor } from '../utils.js';
 import { DIRECTION_LABELS, COLORS } from '../config.js';
+import { CHARSETS } from '../theme.js';
 import { createStopLookup } from '../domain/stop-lookup.js';
 import { renderColumn } from './stop-column.js';
 import { occupancyBar, fmtEta, etaForStop, statusLines, vehicleStatusLabel, miniCarIndicator, renderVehicleCard, padBetween } from './vehicle-card.js';
@@ -49,6 +50,7 @@ export function createRouteView() {
         border: { type: 'line' },
         scrollable: true,
         alwaysScroll: true,
+        mouse: true,
         style: { border: { fg: COLORS.border }, bg: 'black' },
       });
       rightPane = blessed.box({
@@ -87,8 +89,8 @@ export function createRouteView() {
     box.append(leftPane);
     box.append(rightPane);
 
-    leftPane.on('wheelup',    () => { leftPane.scroll(-3); getScreen().render(); });
-    leftPane.on('wheeldown',  () => { leftPane.scroll(3);  getScreen().render(); });
+    leftPane.on('wheelup',    () => { scroll(-3); getScreen().render(); });
+    leftPane.on('wheeldown',  () => { scroll(3);  getScreen().render(); });
     rightPane.on('wheelup',   () => { rightPane.scroll(-3); getScreen().render(); });
     rightPane.on('wheeldown', () => { rightPane.scroll(3);  getScreen().render(); });
   }
@@ -215,7 +217,8 @@ function updateInfoBox(buses, stops, extraStops, unplaced, colorMap, rightPane, 
     return ia - ib;
   });
 
-  const divider = `{${COLORS.inactive}-fg}${'─'.repeat(INNER)}/{/${COLORS.inactive}-fg}`;
+  const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
+  const divider = `{${COLORS.inactive}-fg}${cs.divider.repeat(Math.min(INNER, 60))}{/${COLORS.inactive}-fg}`;
 
   const cards = sortedBuses.flatMap(bus => {
     const vehiclePreds = predictions[bus.id] ?? [];

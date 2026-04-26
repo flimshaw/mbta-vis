@@ -1,10 +1,11 @@
 import { busMarker } from '../utils.js';
 import { COLORS } from '../config.js';
+import { CHARSETS } from '../theme.js';
 
 export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}) {
-  // Calculate label width based on the longest station name in the route
-  // This ensures the track visualization fills available space
-  const maxNameLength = Math.max(...stops.map(s => s.name.length), 10); // minimum 10 for short names
+  // Cap station name width to prevent overflow; hard cap at 22 chars
+  const rawMaxName = Math.max(...stops.map(s => s.name.length), 10);
+  const maxNameLength = Math.min(rawMaxName, 22);
   const baseLabelWidth = maxNameLength + 4; // buffer for marker, space, eta
   
   // Calculate track width, enforcing minimum of 20% of pane width
@@ -39,15 +40,16 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
       p => p.bus.currentStatus === 'IN_TRANSIT_TO' || p.bus.currentStatus === 'UNKNOWN'
     );
 
+    const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
+
     // Build label: name + ETA hint, fitting within labelWidth
     const eta = stopEtas[stop.name];
     const etaStr = eta ? `(${eta})` : '';
     const maxNameLen = etaStr ? labelWidth - etaStr.length - 1 : labelWidth;
     const name = stop.name.length > maxNameLen
-      ? stop.name.slice(0, maxNameLen - 1) + '…'
+      ? stop.name.slice(0, maxNameLen - 1) + cs.ellipsis
       : stop.name;
-
-    let marker = `{${COLORS.inactive}-fg}◉{/${COLORS.inactive}-fg}`;
+    let marker = `{${COLORS.inactive}-fg}${cs.stopMarker}{/${COLORS.inactive}-fg}`;
     let nameColor = COLORS.inactive;
     if (atStop.length > 0) {
       const p = atStop[0];
@@ -72,8 +74,8 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
 
     let trackPart = '';
     if (!(i === stops.length - 1 && !hasMoreStops)) {
-      const track = Array(trackWidth).fill('·');
-      track[0] = '╎';
+      const track = Array(trackWidth).fill(cs.trackDot);
+      track[0] = cs.trackEdge;
 
       // Show approaching buses on the track segment (they are INCOMING_AT the next stop)
       // Their progress is shown on segmentIndex, while their destination station is highlighted

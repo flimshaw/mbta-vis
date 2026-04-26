@@ -1,4 +1,5 @@
-import { BUS_PALETTE } from './config.js';
+import { BUS_PALETTE, COLORS } from './config.js';
+import { CHARSETS } from './theme.js';
 
 /**
  * Calculate the haversine distance between two coordinates
@@ -201,11 +202,12 @@ export function busColor(busId, colorMap) {
  * @returns {{ char: string }}
  */
 export function busMarker(bus) {
+  const cs = COLORS?.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
   switch (bus.currentStatus) {
-  case 'STOPPED_AT':    return { char: '■' };
-  case 'INCOMING_AT':   return { char: '▷' };
-  case 'IN_TRANSIT_TO': return { char: '▶' };
-  default:              return { char: '▶' };
+  case 'STOPPED_AT':    return { char: cs.stopped };
+  case 'INCOMING_AT':   return { char: cs.incoming };
+  case 'IN_TRANSIT_TO': return { char: cs.inTransit };
+  default:              return { char: cs.inTransit };
   }
 }
 
