@@ -3,7 +3,7 @@ import { COLORS } from '../config.js';
 import { CHARSETS } from '../theme.js';
 
 export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}) {
-  const FIXED_LABEL_WIDTH = 20; // name + eta always totals this many visible chars
+  const FIXED_LABEL_WIDTH = 30; // name + eta always totals this many visible chars
   const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
 
   // Track width: innerWidth minus label(20) minus marker(1) minus space(1) minus 1 safety margin
