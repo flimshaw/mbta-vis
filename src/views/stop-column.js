@@ -3,20 +3,14 @@ import { COLORS } from '../config.js';
 import { CHARSETS } from '../theme.js';
 
 export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = false, colorMap = new Map(), globalOffset = 0, stopEtas = {}) {
-  // Cap station name width to prevent overflow; hard cap at 22 chars
-  const rawMaxName = Math.max(...stops.map(s => s.name.length), 10);
-  const maxNameLength = Math.min(rawMaxName, 22);
-  const baseLabelWidth = maxNameLength + 4; // buffer for marker, space, eta
-  
-  // Calculate track width, enforcing minimum of 20% of pane width
-  // Subtract 1 for a safety margin — blessed wraps when content reaches pane width
-  const rawTrackWidth = innerWidth - baseLabelWidth - 3 - 1;
+  const FIXED_LABEL_WIDTH = 20; // name + eta always totals this many visible chars
+  const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
+
+  // Track width: innerWidth minus label(20) minus marker(1) minus space(1) minus 1 safety margin
+  const rawTrackWidth = innerWidth - FIXED_LABEL_WIDTH - 3;
   const minTrackWidth = Math.floor(innerWidth * 0.20);
   const trackWidth = Math.max(minTrackWidth, rawTrackWidth);
-  
-  // Recalculate label width to match actual allocation
-  const labelWidth = innerWidth - trackWidth - 3;
-  
+
   const lines = [];
 
   for (let i = 0; i < stops.length; i++) {
@@ -27,12 +21,10 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
       p => p.bus.currentStatus === 'STOPPED_AT' && p.stopIdx === i + globalOffset
     );
 
-    // INCOMING_AT buses: highlight the destination station (stopIdx)
     const approachingAtStation = Object.values(segmentBuses).flat().filter(
       p => p.bus.currentStatus === 'INCOMING_AT' && p.stopIdx === i + globalOffset
     );
 
-    // Show INCOMING_AT progress markers on the track segment (segmentIndex)
     const approachingOnTrack = (segmentBuses[i] ?? []).filter(
       p => p.bus.currentStatus === 'INCOMING_AT'
     );
@@ -41,15 +33,16 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
       p => p.bus.currentStatus === 'IN_TRANSIT_TO' || p.bus.currentStatus === 'UNKNOWN'
     );
 
-    const cs = COLORS.asciiMode ? CHARSETS.ascii : CHARSETS.unicode;
-
-    // Build label: name + ETA hint, fitting within labelWidth
+    // Build name: the label (name + eta) is always exactly FIXED_LABEL_WIDTH visible chars.
+    // When there's an ETA, the name is shortened to make room.
     const eta = stopEtas[stop.name];
     const etaStr = eta ? `(${eta})` : '';
-    const maxNameLen = etaStr ? labelWidth - etaStr.length - 1 : labelWidth;
-    const name = stop.name.length > maxNameLen
-      ? stop.name.slice(0, maxNameLen - 1) + cs.ellipsis
+    const nameLen = etaStr ? FIXED_LABEL_WIDTH - 1 - etaStr.length : FIXED_LABEL_WIDTH;
+    const name = stop.name.length > nameLen
+      ? stop.name.slice(0, Math.max(nameLen - 3, 0)) + '.. '
       : stop.name;
+    const paddedName = name.padEnd(nameLen);
+
     let marker = `{${COLORS.inactive}-fg}${cs.stopMarker}{/${COLORS.inactive}-fg}`;
     let nameColor = COLORS.inactive;
     if (atStop.length > 0) {
@@ -71,10 +64,7 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
     const etaTag = etaStr
       ? (eta === 'now' ? `{${COLORS.cyan}-fg}${etaStr}{/${COLORS.cyan}-fg}` : `{${COLORS.inactive}-fg}${etaStr}{/${COLORS.inactive}-fg}`)
       : '';
-    // Strip tags before padding so blessed-visible width is exact
-    const nameVisible = name.replace(/\{[^}]+\}/g, '');
-    const padTo = labelWidth - 1 - (etaStr ? etaStr.length + 1 : 0);
-    const paddedName = nameVisible.padEnd(Math.max(padTo, nameVisible.length));
+    // paddedName is exactly nameLen chars; with eta the total label is FIXED_LABEL_WIDTH
     const nameTag = `{${nameColor}-fg}${paddedName}{/${nameColor}-fg}${etaStr ? ' ' + etaTag : ''}`;
 
     let trackPart = '';
@@ -97,7 +87,7 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
         track[pos] = { color, char: busMarker(p.bus).char };
       });
 
-      trackPart = ' ' + track.map(ch =>
+      trackPart = track.map(ch =>
         typeof ch === 'object'
           ? `{${ch.color}-fg}${ch.char}{/${ch.color}-fg}`
           : `{${COLORS.inactive}-fg}${ch}{/${COLORS.inactive}-fg}`
