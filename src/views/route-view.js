@@ -51,7 +51,7 @@ export function createRouteView() {
         scrollable: true,
         alwaysScroll: true,
         mouse: true,
-        style: { border: { fg: COLORS.border }, bg: 'black' },
+        style: { border: { fg: COLORS.border } },
       });
       rightPane = blessed.box({
         top: '30%', left: 0,
@@ -62,7 +62,7 @@ export function createRouteView() {
         label: ' Vehicles ',
         scrollable: true,
         alwaysScroll: true,
-        style: { border: { fg: COLORS.border }, bg: 'black' },
+        style: { border: { fg: COLORS.border } },
       });
     } else {
       // Landscape layout: 50% left (stops), 50% right (vehicles)
@@ -72,7 +72,7 @@ export function createRouteView() {
         height: '100%',
         tags: true,
         border: { type: 'line' },
-        style: { border: { fg: COLORS.border }, bg: 'black' },
+        style: { border: { fg: COLORS.border } },
       });
       rightPane = blessed.box({
         top: 0, right: 0,
@@ -83,7 +83,7 @@ export function createRouteView() {
         label: ' Vehicles ',
         scrollable: true,
         alwaysScroll: true,
-        style: { border: { fg: COLORS.border }, bg: 'black' },
+        style: { border: { fg: COLORS.border } },
       });
     }
     box.append(leftPane);

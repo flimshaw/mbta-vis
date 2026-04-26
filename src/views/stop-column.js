@@ -9,7 +9,8 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
   const baseLabelWidth = maxNameLength + 4; // buffer for marker, space, eta
   
   // Calculate track width, enforcing minimum of 20% of pane width
-  const rawTrackWidth = innerWidth - baseLabelWidth - 3;
+  // Subtract 1 for a safety margin — blessed wraps when content reaches pane width
+  const rawTrackWidth = innerWidth - baseLabelWidth - 3 - 1;
   const minTrackWidth = Math.floor(innerWidth * 0.20);
   const trackWidth = Math.max(minTrackWidth, rawTrackWidth);
   
@@ -70,7 +71,11 @@ export function renderColumn(stops, segmentBuses, innerWidth, hasMoreStops = fal
     const etaTag = etaStr
       ? (eta === 'now' ? `{${COLORS.cyan}-fg}${etaStr}{/${COLORS.cyan}-fg}` : `{${COLORS.inactive}-fg}${etaStr}{/${COLORS.inactive}-fg}`)
       : '';
-    const nameTag = `{${nameColor}-fg}${name.padEnd(labelWidth - (etaStr ? etaStr.length + 1 : 0))}{/${nameColor}-fg}${etaStr ? ' ' + etaTag : ''}`;
+    // Strip tags before padding so blessed-visible width is exact
+    const nameVisible = name.replace(/\{[^}]+\}/g, '');
+    const padTo = labelWidth - 1 - (etaStr ? etaStr.length + 1 : 0);
+    const paddedName = nameVisible.padEnd(Math.max(padTo, nameVisible.length));
+    const nameTag = `{${nameColor}-fg}${paddedName}{/${nameColor}-fg}${etaStr ? ' ' + etaTag : ''}`;
 
     let trackPart = '';
     if (!(i === stops.length - 1 && !hasMoreStops)) {
