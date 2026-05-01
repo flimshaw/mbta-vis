@@ -8,6 +8,12 @@ import { THEME_NAME, OVERRIDE_THEME, getAvailableThemes } from './theme.js';
 export async function main() {
   const args = process.argv.slice(2);
 
+  // Parse --version flag
+  if (args.includes('--version')) {
+    console.log('mbta-vis v1.0.6');
+    process.exit(0);
+  }
+
   // Parse --theme flag for CLI override
   const themeIdx = args.indexOf('--theme');
   if (themeIdx !== -1) {
