@@ -36,6 +36,8 @@ export function showHelp(screen) {
       `  {${COLORS.cyan}-fg}1-9{/${COLORS.cyan}-fg}     Jump to tab`,
       `  {${COLORS.cyan}-fg}q{/${COLORS.cyan}-fg}       Quit`,
       '',
+      `  {${COLORS.dim}-fg}              Version 1.0.6              {/${COLORS.dim}-fg}`, 
+      '',
       '  {bold}Bus Status Icons{/bold}',
       '',
       `  {${COLORS.yellow}-fg}${cs.stopped}{/${COLORS.yellow}-fg}  STOPPED_AT    {${COLORS.green}-fg}${cs.inTransit}{/${COLORS.green}-fg}  IN_TRANSIT_TO`,
