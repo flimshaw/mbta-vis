@@ -1,7 +1,7 @@
 import { fetchBusRoutes, fetchSubwayRoutes } from './mbta-api.js';
 import { initScreen, addTab, updateTabLabel, setStatus, setRouteList, onRouteSelect, onDirectionToggle, onNewTab, onTabSwitch, onScroll, openRouteSelector, setActiveTab, getRouteName } from './screen.js';
 import { createRouteView } from './views/route-view.js';
-import { DEFAULT_ROUTE, DEFAULT_DIRECTION } from './config.js';
+import { DEFAULT_ROUTE, DEFAULT_DIRECTION, VERSION } from './config.js';
 import { createTabManager } from './tab-manager.js';
 import { THEME_NAME, OVERRIDE_THEME, getAvailableThemes } from './theme.js';
 
@@ -10,7 +10,7 @@ export async function main() {
 
   // Parse --version flag
   if (args.includes('--version')) {
-    console.log('mbta-vis v1.0.6');
+    console.log(`mbta-vis v${VERSION}`);
     process.exit(0);
   }
 
